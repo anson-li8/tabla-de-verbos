@@ -14,9 +14,13 @@ import {
   ArrowRight,
   ArrowUpRight,
   Clock3,
+  Gauge,
   Loader2,
   Sparkles,
+  Sun,
+  Sunrise,
   Target,
+  Timer,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,7 +36,8 @@ import {
 import { ROW_META, type RowKey } from "@/lib/conjugator/types";
 import { cn } from "@/lib/utils";
 
-import { MICRO, timeAgo, type FocusStatsResponse } from "./types";
+import { MicroLabel } from "./micro-label";
+import { MICRO, timeAgo, hourBucketLabelEs, type FocusStatsResponse } from "./types";
 
 // ── Sparkline geometry ───────────────────────────────────────
 
@@ -206,7 +211,102 @@ function Sparkline({
   );
 }
 
-// ── Panel ────────────────────────────────────────────────────
+// ── Insight rows (pace + time-of-day) ───────────────────────
+
+/** static per-bucket icon (module-level so it never re-mounts) */
+function BucketIcon({
+  bucket,
+  className,
+}: {
+  bucket: string;
+  className?: string;
+}) {
+  if (bucket === "morning")
+    return <Sunrise className={className} aria-hidden="true" />;
+  if (bucket === "afternoon")
+    return <Sun className={className} aria-hidden="true" />;
+  return <Timer className={className} aria-hidden="true" />;
+}
+
+function Insights({
+  slowestTense,
+  bestHour,
+  onTenseDrill,
+}: {
+  slowestTense: FocusStatsResponse["slowestTense"];
+  bestHour: FocusStatsResponse["bestHour"];
+  onTenseDrill: (tense: string) => void;
+}) {
+  if (!slowestTense && !bestHour) return null;
+
+  return (
+    <div>
+      <MicroLabel>insights</MicroLabel>
+      <ul className="mt-2.5 space-y-1.5">
+        {slowestTense && (
+          <motion.li
+            key="pace"
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.15, duration: 0.3, ease: "easeOut" }}
+            className="flex min-w-0 items-center gap-2.5 rounded-lg border border-border/70 bg-secondary/40 px-3 py-2.5"
+          >
+            <Gauge className="size-4 shrink-0 text-warn" aria-hidden="true" />
+            <p className="min-w-0 flex-1 text-[13px] leading-snug text-foreground/90">
+              <span className="font-semibold">{slowestLabel(slowestTense)}</span>{" "}
+              takes you{" "}
+              <span className="font-mono tabular-nums text-warn">
+                {slowestTense.factor}×
+              </span>{" "}
+              longer than average —{" "}
+              <span className="text-muted-foreground">
+                {(slowestTense.avgMs / 1000).toFixed(1)}s vs{" "}
+                {(slowestTense.overallAvgMs / 1000).toFixed(1)}s per question
+              </span>
+            </p>
+            <button
+              type="button"
+              onClick={() => onTenseDrill(slowestTense.tense)}
+              className="shrink-0 rounded-md px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-primary transition-colors outline-none hover:bg-primary/10 focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-95"
+              aria-label={`drill ${slowestLabel(slowestTense)} — your slowest tense`}
+            >
+              drill it
+            </button>
+          </motion.li>
+        )}
+        {bestHour && (
+          <motion.li
+            key="hour"
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.23, duration: 0.3, ease: "easeOut" }}
+            className="flex min-w-0 items-center gap-2.5 rounded-lg border border-border/70 bg-secondary/40 px-3 py-2.5"
+          >
+            <BucketIcon
+              bucket={bestHour.bucket}
+              className="size-4 shrink-0 text-success"
+            />
+            <p className="min-w-0 flex-1 text-[13px] leading-snug text-foreground/90">
+              you&apos;re sharpest in{" "}
+              <span className="font-semibold">
+                {hourBucketLabelEs(bestHour.bucket)}
+              </span>{" "}
+              —{" "}
+              <span className="text-muted-foreground">
+                {Math.round(bestHour.avgAccuracy * 100)}% avg over{" "}
+                {bestHour.sessions} session{bestHour.sessions === 1 ? "" : "s"}
+              </span>
+            </p>
+          </motion.li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function slowestLabel(t: NonNullable<FocusStatsResponse["slowestTense"]>): string {
+  return ROW_META[t.tense as RowKey]?.labelEs ?? t.tense;
+}
 
 interface FocusPanelProps {
   stats: FocusStatsResponse | null;
@@ -285,7 +385,7 @@ export function FocusPanel({
             {/* toughest verbs + shakiest tenses */}
             <div className="min-w-0 space-y-5">
               <div>
-                <p className={MICRO}>toughest verbs</p>
+                <MicroLabel>toughest verbs</MicroLabel>
                 {hardestVerbs.length === 0 ? (
                   <p className="mt-2.5 flex items-center gap-2 text-sm text-muted-foreground">
                     <Sparkles
@@ -332,7 +432,7 @@ export function FocusPanel({
 
               {hardestTenses.length > 0 && (
                 <div>
-                  <p className={MICRO}>shakiest tenses</p>
+                  <MicroLabel>shakiest tenses</MicroLabel>
                   <ul className="mt-2.5 flex flex-wrap gap-1.5">
                     {hardestTenses.map((t) => {
                       const label =
@@ -373,6 +473,13 @@ export function FocusPanel({
               )}
             </div>
           </div>
+
+          {/* pace + time-of-day insights */}
+          <Insights
+            slowestTense={stats.slowestTense}
+            bestHour={stats.bestHour}
+            onTenseDrill={onTenseDrill}
+          />
 
           {/* drill quick-start */}
           {recentMisses.length > 0 ? (

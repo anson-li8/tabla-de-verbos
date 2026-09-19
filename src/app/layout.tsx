@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
+import { SwRegister } from "@/components/sw-register";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -36,6 +37,14 @@ export const metadata: Metadata = {
   ],
   icons: {
     icon: "/icon.svg",
+    apple: "/icons/icon-192.png",
+  },
+  manifest: "/manifest.webmanifest",
+  applicationName: "Tabla de Verbos",
+  appleWebApp: {
+    capable: true,
+    title: "Tabla de Verbos",
+    statusBarStyle: "default",
   },
   openGraph: {
     title: "Tabla de Verbos",
@@ -43,6 +52,17 @@ export const metadata: Metadata = {
     siteName: "Tabla de Verbos",
     type: "website",
   },
+};
+
+/** PWA theme color — cream paper in light, ink in dark */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f0e1" },
+    { media: "(prefers-color-scheme: dark)", color: "#110d0b" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -63,6 +83,7 @@ export default function RootLayout({
         >
           {children}
           <Toaster />
+          <SwRegister />
         </ThemeProvider>
       </body>
     </html>

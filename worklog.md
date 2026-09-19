@@ -345,3 +345,45 @@ Task: Continuous improvement round 5 — status assessment, QA, per-tense timing
 - avgMsPerQuestion on the results hero double-counts nothing but reflects submit+skip time only (time spent reading feedback is excluded by design — questionStartRef resets when the next question renders).
 - Next-round candidate features (priority order): (1) slowest-tense insight line in the focus panel ("you're 2× slower on pretérito — drill it?") derived from the new ms data; (2) share card with tense-by-tense mini bars (canvas already has room between divider and stats row); (3) hour-of-day practice heatmap or "best practice time" hint; (4) tables-mode per-cell streak/attempt counter (needs schema or localStorage); (5) PWA manifest + offline shell (verbs/conjugation are client-computable, only session save needs the network).
 - QA screenshot artifacts: /home/z/my-project/qa/r5-*.png (5 files).
+
+---
+Task ID: 12 (cron review round 6)
+Agent: cron-webDevReview
+Task: Continuous improvement round 6 — status assessment, QA, focus-panel insights (pace + time-of-day), share-card tense bars, PWA + offline questions, tables-mode cell mastery, styling polish
+
+## Current project status / assessment
+- App fully stable at round start (rounds 1–11 complete): both modes browser-verified, engine PASS 13399/13399, lint clean, tsc clean (src/), dev server healthy on :3000, DB at 0 sessions, all stray agent-browser sessions closed first (named session `r6-qa` used throughout).
+- Round-6 QA pass found NO app bugs: Tables fill → check → toasts, Practice timed/infinite → skip → end-early → results → share, dark mode, mobile 390px (0 overflow offenders both modes), no console errors.
+- Two DEV-ENVIRONMENT hazards discovered & resolved this round (NOT app bugs — see risks below): stale Tailwind utility generation in Turbopack, and the new service worker serving stale CSS in dev.
+
+## Goals / completed modifications / verification results
+1. FEATURE — focus-panel "insights" strip (pace + best time of day):
+   - GET /api/sessions/stats: new `slowestTense` {tense, avgMs, overallAvgMs, factor} — the meaningfully-slowest tense (≥5 timed answers, ≥1.35× the overall avg, ≥1.5s slower, needs ≥2 tracked tenses for contrast); new `bestHour` {bucket, avgAccuracy, sessions} — morning (5–12) / afternoon (12–18) / evening (18–05, midnight-wrapping) buckets, best needs ≥2 sessions AND ≥8pts gap over the runner-up. curl-verified with seeded data (pret 1.5× / 5.4s vs 3.5s; morning 82% over 24 sessions).
+   - practice/types.ts: SlowestTense + BestHour interfaces, hourBucketLabelEs(); focus-panel.tsx: new Insights section (mono "insights" label + staggered rows): Gauge icon + "pretérito takes you 1.5× longer than average — 5.4s vs 3.5s per question" + "drill it" button (starts a tense drill — browser-verified); Sunrise/Sun/Timer icon + "you're sharpest in la mañana — 82% avg over 24 sessions".
+2. FEATURE — share card per-tense mini bars:
+   - share-card.ts: optional `tenses: {label, pct}[]` (≤4); card height is now dynamic (1560 with bars, 1350 compact); new "TIEMPOS VERBALES" section between divider and stats row — mono uppercase label left, 330px rounded bar track middle (accuracyColor semantics: ≥80 green / ≥50 brick / else red), tabular pct right; stats row + footer shift down when bars present. results-screen passes the 4 weakest tenses (tallyRows is already weakest-first). Browser-verified via download (149KB PNG) + VLM review 9/10 ("4 bars, no overlap, vertical rhythm excellent, nothing clipped").
+3. FEATURE — PWA + offline practice:
+   - public/manifest.webmanifest (standalone, cream theme #f7f0e1, education categories); icons generated via sharp from icon.svg → public/icons/icon-{192,512}.png + maskable variants (brick background, 10% padding, scripts/gen-icons.ts reusable).
+   - public/sw.js (CACHE tdv-shell-v2): navigations network-first→cached shell→offline page; immutable assets (hashed fonts, /icons, svgs, manifest) cache-first; OTHER static network-first→cache fallback (dev-safe — see risks); /api/* network-only. src/components/sw-register.tsx registers after load (silent failures).
+   - layout.tsx: manifest + appleWebApp metadata, Viewport themeColor (light #f7f0e1 / dark #110d0b = oklch(0.165 0.008 55) converted), viewportFit cover.
+   - OFFLINE QUESTIONS: fetchQuestion in practice/types.ts falls back to the shared pure `generateQuestion(settings)` when POST /api/practice/question is unreachable — the whole quiz works offline. Browser-verified by intercepting window.fetch (rejecting the question endpoint): quiz started, generated "ellos freían" locally, answer graded locally, correct/miss recorded.
+4. FEATURE — Tables-mode per-cell mastery (localStorage):
+   - New src/components/tables/use-cell-mastery.ts: useSyncExternalStore-backed store (server snapshot empty → hydration-safe; lint-clean vs the new react-hooks/set-state-in-effect rule). Key `verb|subject|row|lang` → {c, t}; MASTERY_THRESHOLD=2 exact-correct (accent warnings excluded); map capped at 4000 entries; defensive clamping of localStorage data.
+   - tables-mode.tsx: recordVerdicts folded into handleCheck; computes masteredRows (BOTH es+en ≥2) + masteredCount. conjugation-chart.tsx: header badge "N/23 mastered" (success-tinted, BadgeCheck icon, tooltip explains the rule) + per-row BadgeCheck next to the label. VERIFIED: check hablar/yo inf row twice → storage {c:2,t:2}, badge "1/23 mastered", row check icon.
+5. STYLING (mandatory focus):
+   - Chart inputs: italic Fraunces placeholders at muted/60 (editorial empty state) — verified computed style "italic Fraunces" in light AND dark.
+   - Chart rows: label hierarchy (semibold name + italic lighter sub-label), subtle row hover bg (hover:bg-foreground/[0.035] — gentle warm tint), rounded rows.
+   - Section labels: signature brick dash prefix (4px rule, primary/70) before "question types / tenses / verbs / session" (setup) and "toughest verbs / shakiest tenses / insights" (focus panel, via new shared MicroLabel component src/components/practice/micro-label.tsx).
+   - empezar CTA: brick-tinted raised shadow (shadow-primary/45, deepens on hover). Level pills: hover bg. Footer: stats in mono medium, shortcut hints in italic Fraunces (two-tier hierarchy).
+   - VLM review of all styled screens: placeholders ✓ hierarchy ✓ dashes ✓ shadow ✓ "no visual defects".
+6. QA/verification: lint clean; tsc clean (src/); engine PASS 13400/13400; all APIs 200 (verbs/sessions/stats/manifest/sw); full timed-session flow re-verified after all changes (quiz → answer → results, zero page errors); mobile 390px 0 offenders both modes; dark mode VLM pass (contrast, tints, layout); DB cleaned to 0 sessions; mastery test data cleared; light theme restored.
+
+## Unresolved issues / risks / next-round priorities
+- **NEW dev hazard — stale Tailwind utilities**: classes added to EXISTING files' string literals may not be generated into the dev CSS even after `rm -rf .next` + restart (observed with placeholder:/hover:/shadow- utilities; classes present in DOM but rules missing from CSS). FIX that worked: `touch` the modified .tsx files, wait ~5s, reload. Suspect Turbopack's incremental scan cache keyed by mtime. If styles silently don't apply: verify with computed styles, then touch + reload.
+- **NEW dev hazard — service worker caching in dev**: sw.js v1 used cache-first for ALL /_next/static — dev chunk URLs are stable (not content-hashed), so the SW served stale CSS forever. Fixed in sw.js v2 (network-first for non-immutable assets); old tdv-shell-v1 caches purge on activate. When debugging styles, remember the SW: unregister + clear caches if needed (`navigator.serviceWorker.getRegistrations()…unregister()` + `caches.keys()…delete()`).
+- MultiEdit corruption gremlin struck AGAIN (stray `n` inserted in a Badge JSX line). Rule stands: after ANY MultiEdit, re-read the file before moving on.
+- New eslint-plugin-react-hooks v6 rules are strict: `static-components` (no capitalized component variables created during render — use a module-level component with internal branches) and `set-state-in-effect` (use useSyncExternalStore for localStorage reads, like use-cell-mastery.ts and use-daily-goal.ts do).
+- agent-browser notes: the quiz input is NOT inside a <form> (submit via keydown Enter dispatched on the input); empty answers no-op (fill non-empty); button textContent matching is case-sensitive ("Practice" vs lowercase display).
+- Next-round candidate features (priority order): (1) offline indicator — a small badge when the SW controls the page & the last question came from the local generator; (2) mastery-aware verb picker — dim/check verbs with all rows mastered for the current subject; (3) install prompt hint (beforeinstallprompt) for the new PWA; (4) pace insight on the results screen (avgMs vs personal overall avg); (5) cross-tab mastery sync via BroadcastChannel (low priority — single-tab use is fine).
+- scripts/gen-icons.ts kept (regenerates PWA icons from icon.svg); scripts/seed-hours.ts (temp) deleted.
+- QA screenshot artifacts: /home/z/my-project/qa/r6-*.png (19 files) + qa/r6-07-share-card.png (the generated card).

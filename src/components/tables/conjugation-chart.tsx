@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, BookOpen, Check } from "lucide-react";
+import { AlertTriangle, BadgeCheck, BookOpen, Check } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -32,6 +32,7 @@ import type {
   RevealData,
   VerdictsMap,
 } from "./types";
+import { MASTERY_THRESHOLD } from "./use-cell-mastery";
 
 // ── group metadata ───────────────────────────────────────────
 
@@ -115,6 +116,8 @@ function InputCell({
           spellCheck={false}
           className={cn(
             "h-11 rounded-lg",
+            // editorial empty state — italic serif, warm & quiet
+            "placeholder:font-display placeholder:italic placeholder:text-muted-foreground/60",
             isSpanish ? "text-base md:text-lg" : "text-sm md:text-base",
             state === "correct" &&
               "border-success/70 bg-success/10 pr-8 focus-visible:border-success focus-visible:ring-success/30",
@@ -210,6 +213,10 @@ interface ConjugationChartProps {
   revealMode: boolean;
   /** reveal answers for the *current* verb+subject (null while loading/stale) */
   revealData: RevealData | null;
+  /** rows with both cells mastered (≥2 exact-correct each) */
+  masteredRows: Set<RowKey>;
+  /** how many of the 23 rows are mastered for this verb+subject */
+  masteredCount: number;
   onAnswerChange: (key: RowKey, lang: CellLang, value: string) => void;
   onRequestCheck: () => void;
 }
@@ -221,6 +228,8 @@ export function ConjugationChart({
   verdicts,
   revealMode,
   revealData,
+  masteredRows,
+  masteredCount,
   onAnswerChange,
   onRequestCheck,
 }: ConjugationChartProps) {
@@ -307,6 +316,16 @@ export function ConjugationChart({
             <Badge variant="outline" className="font-mono text-[10px]">
               sp {verbLevel(verb)}
             </Badge>
+            {masteredCount > 0 && (
+              <Badge
+                variant="outline"
+                className="gap-1 border-success/40 bg-success/10 font-mono text-[10px] tabular-nums text-success"
+                title={`${masteredCount} of ${TENSE_ROWS.length} rows answered correctly ${MASTERY_THRESHOLD}+ times in both languages`}
+              >
+                <BadgeCheck className="size-3" aria-hidden="true" />
+                {masteredCount}/{TENSE_ROWS.length} mastered
+              </Badge>
+            )}
           </div>
         </CardAction>
       </CardHeader>
@@ -379,13 +398,19 @@ export function ConjugationChart({
                   return (
                     <div
                       key={row.key}
-                      className="grid gap-2 py-3 md:grid-cols-[minmax(120px,1fr)_1fr_1fr] md:items-center md:gap-x-4"
+                      className="group grid gap-2 rounded-lg px-1.5 py-3 transition-colors duration-150 hover:bg-foreground/[0.035] md:grid-cols-[minmax(120px,1fr)_1fr_1fr] md:items-center md:gap-x-4 md:px-2"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-medium leading-tight">
+                        <p className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
                           {row.labelEs}
+                          {masteredRows.has(row.key) && (
+                            <BadgeCheck
+                              className="size-3.5 shrink-0 text-success"
+                              aria-label="row mastered"
+                            />
+                          )}
                         </p>
-                        <p className="text-[11px] leading-tight text-muted-foreground">
+                        <p className="text-[11px] italic leading-tight text-muted-foreground/80">
                           {row.labelEn}
                         </p>
                       </div>

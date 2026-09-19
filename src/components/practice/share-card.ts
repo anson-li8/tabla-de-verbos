@@ -8,6 +8,13 @@
 // destructive < 50%.
 // ─────────────────────────────────────────────────────────────
 
+export interface ShareCardTense {
+  /** display label, e.g. "pretérito" */
+  label: string;
+  /** 0..100, rounded by the caller */
+  pct: number;
+}
+
 export interface ShareCardData {
   score: number;
   total: number;
@@ -17,10 +24,14 @@ export interface ShareCardData {
   avgMsPerQuestion: number;
   /** e.g. "timed · 2 min" */
   modeLine: string;
+  /** up to 4 per-tense accuracy bars, weakest first (optional) */
+  tenses?: ShareCardTense[];
 }
 
 const W = 1080;
-const H = 1350;
+/** tall layout (with tense bars) vs compact (without) */
+const H_TENSES = 1560;
+const H_PLAIN = 1350;
 
 // palette (light paper theme — theme-independent for sharing)
 const PAPER = "#f7f0e1";
@@ -94,6 +105,10 @@ function drawCard(
   MONO = fonts.mono;
   const acc = Math.min(1, Math.max(0, d.accuracy));
   const pct = Math.round(acc * 100);
+  const tenses = (d.tenses ?? []).filter(
+    (t) => typeof t.label === "string" && t.label && typeof t.pct === "number"
+  );
+  const H = tenses.length > 0 ? H_TENSES : H_PLAIN;
 
   // ── paper + dotted texture ──────────────────────────────
   ctx.fillStyle = PAPER;
@@ -168,7 +183,47 @@ function drawCard(
   ctx.lineTo(W / 2 + 40, 1032);
   ctx.stroke();
 
+  // ── per-tense accuracy bars (weakest first) ────────────
+  // absent on tiny sessions — the layout collapses gracefully
+  if (tenses.length > 0) {
+    monoSpaced(ctx, "TIEMPOS VERBALES", W / 2, 1086, 7, INK_MUTED, 19);
+    const rows = Math.min(tenses.length, 4);
+    const trackX = 470;
+    const trackW = 330;
+    const rowStep = 44;
+    for (let i = 0; i < rows; i++) {
+      const t = tenses[i];
+      const y = 1136 + i * rowStep;
+      // label — left column
+      ctx.font = `500 21px ${fonts.mono}`;
+      ctx.fillStyle = INK_MUTED;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      const label = t.label.toUpperCase().slice(0, 22);
+      ctx.fillText(label, 220, y);
+      // track
+      ctx.fillStyle = "rgba(43, 33, 24, 0.12)";
+      ctx.beginPath();
+      ctx.roundRect(trackX, y - 5, trackW, 10, 5);
+      ctx.fill();
+      // value — colored by the ring semantics
+      const acc = Math.min(1, Math.max(0, t.pct / 100));
+      ctx.fillStyle = accuracyColor(acc);
+      if (acc > 0) {
+        ctx.beginPath();
+        ctx.roundRect(trackX, y - 5, Math.max(10, trackW * acc), 10, 5);
+        ctx.fill();
+      }
+      // pct — right column
+      ctx.fillStyle = INK;
+      ctx.font = `600 22px ${fonts.mono}`;
+      ctx.textAlign = "right";
+      ctx.fillText(`${Math.round(t.pct)}%`, 860, y);
+    }
+  }
+
   // ── stats row ───────────────────────────────────────────
+  const statsY = tenses.length > 0 ? { label: 1310, value: 1358 } : { label: 1092, value: 1140 };
   const stats: [string, string][] = [
     ["RACHA MÁXIMA", String(d.bestStreak)],
     ["TIEMPO / PREGUNTA", `${(d.avgMsPerQuestion / 1000).toFixed(1)}s`],
@@ -177,24 +232,28 @@ function drawCard(
   const colW = 300;
   stats.forEach(([label, value], i) => {
     const x = W / 2 + (i - 1) * colW;
-    monoSpaced(ctx, label, x, 1092, 4, INK_MUTED, 17);
+    monoSpaced(ctx, label, x, statsY.label, 4, INK_MUTED, 17);
     ctx.fillStyle = INK;
     ctx.font = `500 30px ${fonts.mono}`;
-    ctx.fillText(value, x, 1140);
+    ctx.fillText(value, x, statsY.value);
   });
 
   // ── footer ──────────────────────────────────────────────
-  monoSpaced(ctx, dateLabel.toUpperCase(), W / 2, 1240, 5, INK_MUTED, 20);
-  monoSpaced(ctx, "— TABLADEVERBOS —", W / 2, 1276, 5, INK_FAINT, 16);
+  const footerY = tenses.length > 0 ? { date: 1442, mark: 1476 } : { date: 1240, mark: 1276 };
+  monoSpaced(ctx, dateLabel.toUpperCase(), W / 2, footerY.date, 5, INK_MUTED, 20);
+  monoSpaced(ctx, "— TABLADEVERBOS —", W / 2, footerY.mark, 5, INK_FAINT, 16);
 }
 
 /** render the card and trigger a PNG download; resolves false on failure */
 export async function downloadShareCard(d: ShareCardData): Promise<boolean> {
   try {
     const fonts = await resolveFonts();
+    const tenses = (d.tenses ?? []).filter(
+      (t) => typeof t.label === "string" && t.label && typeof t.pct === "number"
+    );
     const canvas = document.createElement("canvas");
     canvas.width = W;
-    canvas.height = H;
+    canvas.height = tenses.length > 0 ? H_TENSES : H_PLAIN;
     const ctx = canvas.getContext("2d");
     if (!ctx) return false;
 

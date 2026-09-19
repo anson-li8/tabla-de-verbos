@@ -137,6 +137,12 @@ export function ResultsScreen({
       bestStreak: summary.bestStreak,
       avgMsPerQuestion: summary.avgMsPerQuestion,
       modeLine,
+      // up to 4 per-tense bars, weakest first — mirrors the on-screen
+      // "tense by tense" section (tallyRows is already weakest-first)
+      tenses: tallyRows.slice(0, 4).map(([tense, entry]) => ({
+        label: ROW_META[tense as RowKey]?.labelEs ?? tense,
+        pct: Math.round(tallyAccuracy(entry) * 100),
+      })),
     });
     setCardBusy(false);
     if (ok) {

@@ -16,6 +16,14 @@
 //                  day-streak (racha), the goal constant and a sparse
 //                  `days` array (last 24 weeks, practiced days only)
 //                  feeding the activity heatmap
+//   slowestTense   the tense with the worst avg-ms-per-question
+//                  (≥ 5 timed answers) when it is meaningfully
+//                  slower than the overall average — feeds the
+//                  focus panel's pace insight
+//   bestHour       the time-of-day bucket (mañana/tarde/noche)
+//                  with the best average accuracy (≥ 2 sessions,
+//                  spread across buckets) — feeds the "best time
+//                  to practice" insight
 //   totals         sessions & misses in the analyzed window
 // ─────────────────────────────────────────────────────────────
 
@@ -38,6 +46,12 @@ export const DAILY_GOAL = 20;
 const DAILY_SCAN = 2000;
 /** days covered by the activity heatmap (24 weeks, Monday-aligned) */
 const HEATMAP_DAYS = 168;
+/** min timed answers before a tense qualifies as "slow" */
+const SLOWEST_MIN_ANSWERS = 5;
+/** how many × the overall average a tense must be to be flagged */
+const SLOWEST_MIN_FACTOR = 1.35;
+/** min sessions per time-of-day bucket before it can be "best" */
+const HOUR_MIN_SESSIONS = 2;
 
 /** normalized missed-question record persisted as JSON (see POST /api/sessions) */
 interface MissRow {
@@ -194,6 +208,104 @@ export async function GET() {
       .sort((a, b) => a.c / a.t - b.c / b.t || b.t - a.t)
       .slice(0, SHAKIEST_LIMIT);
 
+    // ── pace insight (the slowest tense vs everything else) ──
+    // only counts sessions whose tally tracked time; requires a
+    // meaningful slowdown (SLOWEST_MIN_FACTOR × the global average)
+    let slowestTense: {
+      tense: string;
+      avgMs: number;
+      overallAvgMs: number;
+      factor: number;
+    } | null = null;
+    {
+      let totalMs = 0;
+      let totalAnswers = 0;
+      for (const v of tenseAgg.values()) {
+        if (v.ms > 0) {
+          totalMs += v.ms;
+          totalAnswers += v.t;
+        }
+      }
+      if (totalAnswers > 0) {
+        const overallAvgMs = totalMs / totalAnswers;
+        const candidates = [...tenseAgg.entries()]
+          .filter(([, v]) => v.ms > 0 && v.t >= SLOWEST_MIN_ANSWERS)
+          .map(([tense, v]) => ({
+            tense,
+            avgMs: v.ms / v.t,
+            overallAvgMs,
+            factor: v.ms / v.t / overallAvgMs,
+          }))
+          .sort((a, b) => b.avgMs - a.avgMs);
+        const worst = candidates[0];
+        // the factor guard also needs a second candidate (something
+        // to be slower THAN) — with a single tracked tense there is
+        // no contrast and no insight
+        if (
+          worst &&
+          candidates.length > 1 &&
+          worst.factor >= SLOWEST_MIN_FACTOR &&
+          worst.avgMs - overallAvgMs >= 1500 // and at least 1.5s slower
+        ) {
+          slowestTense = {
+            tense: worst.tense,
+            avgMs: Math.round(worst.avgMs),
+            overallAvgMs: Math.round(overallAvgMs),
+            factor: Math.round(worst.factor * 10) / 10,
+          };
+        }
+      }
+    }
+
+    // ── best time of day to practice ─────────────────────────
+    // buckets sessions by local hour into mañana (5–12), tarde
+    // (12–18) and noche (18–5); the best bucket needs a runner-up
+    // to be meaningful and a real accuracy gap to be worth saying
+    const HOUR_BUCKETS: [string, (h: number) => boolean][] = [
+      ["morning", (h) => h >= 5 && h < 12],
+      ["afternoon", (h) => h >= 12 && h < 18],
+      ["evening", (h) => h >= 18 || h < 5], // 18:00–04:59 wraps midnight
+    ];
+    const hourAgg = new Map<string, { acc: number; n: number }>();
+    for (const s of chrono) {
+      const h = s.createdAt.getHours();
+      for (const [name, inBucket] of HOUR_BUCKETS) {
+        if (inBucket(h)) {
+          const prev = hourAgg.get(name) ?? { acc: 0, n: 0 };
+          hourAgg.set(name, { acc: prev.acc + s.accuracy, n: prev.n + 1 });
+          break;
+        }
+      }
+    }
+    let bestHour: {
+      bucket: string;
+      avgAccuracy: number;
+      sessions: number;
+    } | null = null;
+    {
+      const qualified = [...hourAgg.entries()]
+        .filter(([, v]) => v.n >= HOUR_MIN_SESSIONS)
+        .map(([bucket, v]) => ({
+          bucket,
+          avgAccuracy: v.acc / v.n,
+          sessions: v.n,
+        }))
+        .sort((a, b) => b.avgAccuracy - a.avgAccuracy);
+      const best = qualified[0];
+      const runnerUp = qualified[1];
+      if (
+        best &&
+        runnerUp &&
+        best.avgAccuracy - runnerUp.avgAccuracy >= 0.08 // ≥ 8 pts gap
+      ) {
+        bestHour = {
+          bucket: best.bucket,
+          avgAccuracy: Math.round(best.avgAccuracy * 1000) / 1000,
+          sessions: best.sessions,
+        };
+      }
+    }
+
     // ── recent misses (chronological, from the newest sessions) ──
     const recentMisses: MissRow[] = [];
     let missCount = 0;
@@ -257,6 +369,8 @@ export async function GET() {
       trendDelta,
       hardestVerbs,
       hardestTenses,
+      slowestTense,
+      bestHour,
       recentMisses: recentMisses.slice(-MISS_LIMIT),
       daily: {
         goal: DAILY_GOAL,

@@ -95,12 +95,12 @@ export default function Home() {
       </main>
 
       <footer className="mt-auto border-t">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-1.5 px-4 py-4 font-mono text-[11px] text-muted-foreground sm:flex-row sm:px-6">
-          <p>
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-1.5 px-4 py-4 sm:flex-row sm:px-6">
+          <p className="font-mono text-[11px] font-medium tracking-wide text-muted-foreground">
             {ALL_VERBS.length} verbs · {TENSE_ROWS.length} forms ·{" "}
             {SUBJECTS.length} subjects
           </p>
-          <p>
+          <p className="font-display text-[12px] italic text-muted-foreground/80">
             <span className="hidden sm:inline">press 1 / 2 to switch modes · </span>
             <span className="hidden md:inline">arrows + enter to fill the chart · </span>
             accents count

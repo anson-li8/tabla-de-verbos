@@ -158,7 +158,7 @@ export function SetupScreen({
       size="lg"
       onClick={onStart}
       disabled={!canStart || starting}
-      className="h-14 w-full gap-2.5 rounded-xl px-8 text-base font-semibold"
+      className="h-14 w-full gap-2.5 rounded-xl px-8 text-base font-semibold shadow-[0_10px_24px_-10px] shadow-primary/45 transition-shadow hover:shadow-[0_14px_30px_-12px] hover:shadow-primary/55"
     >
       {starting ? (
         <Loader2 className="size-5 animate-spin" aria-hidden="true" />
@@ -213,7 +213,13 @@ export function SetupScreen({
           <CardContent className="space-y-8 p-5 sm:p-8">
             {/* question types */}
             <motion.section variants={sectionVariants} aria-label="question types">
-              <h3 className={cn(MICRO, "mb-3")}>question types</h3>
+              <h3 className={cn(MICRO, "mb-3")}>
+                <span
+                  aria-hidden="true"
+                  className="mr-2 inline-block h-px w-4 translate-y-[-1px] bg-primary/70"
+                />
+                question types
+              </h3>
               <div className="grid gap-3 sm:grid-cols-3">
                 {KIND_CARDS.map(({ kind, label, description, Icon }) => (
                   <SelectCard
@@ -232,7 +238,13 @@ export function SetupScreen({
             {/* tenses */}
             <motion.section variants={sectionVariants} aria-label="tenses">
               <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                <h3 className={MICRO}>tenses</h3>
+                <h3 className={MICRO}>
+                  <span
+                    aria-hidden="true"
+                    className="mr-2 inline-block h-px w-4 translate-y-[-1px] bg-primary/70"
+                  />
+                  tenses
+                </h3>
                 <div className="flex items-center gap-1.5">
                   {TENSE_PRESETS.map((preset) => (
                     <button
@@ -276,7 +288,13 @@ export function SetupScreen({
 
             {/* verbs */}
             <motion.section variants={sectionVariants} aria-label="verb set">
-              <h3 className={cn(MICRO, "mb-3")}>verbs</h3>
+              <h3 className={cn(MICRO, "mb-3")}>
+                <span
+                  aria-hidden="true"
+                  className="mr-2 inline-block h-px w-4 translate-y-[-1px] bg-primary/70"
+                />
+                verbs
+              </h3>
               <div
                 role="radiogroup"
                 aria-label="verb set"
@@ -293,7 +311,7 @@ export function SetupScreen({
                       onClick={() =>
                         onChange({ ...settings, level: level.value })
                       }
-                      className="relative flex h-14 flex-col items-center justify-center rounded-lg outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                      className="relative flex h-14 flex-col items-center justify-center rounded-lg outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 hover:bg-foreground/[0.05]"
                     >
                       {active && (
                         <motion.span
@@ -332,7 +350,13 @@ export function SetupScreen({
 
             {/* session mode */}
             <motion.section variants={sectionVariants} aria-label="session mode">
-              <h3 className={cn(MICRO, "mb-3")}>session</h3>
+              <h3 className={cn(MICRO, "mb-3")}>
+                <span
+                  aria-hidden="true"
+                  className="mr-2 inline-block h-px w-4 translate-y-[-1px] bg-primary/70"
+                />
+                session
+              </h3>
               <div className="grid gap-3 sm:grid-cols-2">
                 <SelectCard
                   selected={settings.mode === "timed"}

@@ -10,6 +10,7 @@ import {
   type RowKey,
   type SubjectKey,
 } from "@/lib/conjugator/types";
+import { generateQuestion } from "@/lib/conjugator/quiz";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -149,6 +150,26 @@ export interface DailyStats {
   days: DayCount[];
 }
 
+/** pace insight — the tense where the user is meaningfully slower */
+export interface SlowestTense {
+  tense: string;
+  /** average ms per question on this tense */
+  avgMs: number;
+  /** average ms per question across all timed tenses */
+  overallAvgMs: number;
+  /** avgMs ÷ overallAvgMs, e.g. 1.8 */
+  factor: number;
+}
+
+/** time-of-day insight — the bucket with the best average accuracy */
+export interface BestHour {
+  /** "morning" | "afternoon" | "evening" */
+  bucket: string;
+  /** 0..1 */
+  avgAccuracy: number;
+  sessions: number;
+}
+
 export interface FocusStatsResponse {
   /** last 14 sessions, oldest → newest */
   trend: FocusTrendPoint[];
@@ -158,11 +179,30 @@ export interface FocusStatsResponse {
   hardestVerbs: HardestVerb[];
   /** weakest tenses by accuracy (from the per-session tallies) */
   hardestTenses: HardestTense[];
+  /** the meaningfully-slowest tense (null when no contrast exists) */
+  slowestTense: SlowestTense | null;
+  /** the best time of day to practice (null when no contrast exists) */
+  bestHour: BestHour | null;
   /** ≤ 30 most recent misses (chronological) — feeds the drill quick-start */
   recentMisses: MissRecord[];
   /** daily goal + racha (day streak) */
   daily: DailyStats;
   totals: { sessions: number; missCount: number };
+}
+
+/** human label for a time-of-day bucket */
+export function hourBucketLabelEs(bucket: string): string {
+  if (bucket === "morning") return "la mañana";
+  if (bucket === "afternoon") return "la tarde";
+  if (bucket === "evening") return "la noche";
+  return bucket;
+}
+
+/** matching clock icon hour for a time-of-day bucket (24h) */
+export function hourBucketIconHour(bucket: string): number {
+  if (bucket === "morning") return 9;
+  if (bucket === "afternoon") return 14;
+  return 20;
 }
 
 // ── Constants ────────────────────────────────────────────────
@@ -378,10 +418,16 @@ function validateQuestion(q: Question): Question {
   return q;
 }
 
-/** POST /api/practice/question → next Question */
+/** POST /api/practice/question → next Question.
+ *  Falls back to local generation when the API is unreachable
+ *  (offline PWA shell) — the generator is pure, shared code. */
 export async function fetchQuestion(settings: QuizSettings): Promise<Question> {
-  const q = await postJson<Question>("/api/practice/question", settings);
-  return validateQuestion(q);
+  try {
+    const q = await postJson<Question>("/api/practice/question", settings);
+    return validateQuestion(q);
+  } catch {
+    return generateQuestion(settings);
+  }
 }
 
 /** GET /api/sessions?limit=8 → { recent, stats } */

@@ -27,6 +27,10 @@ import { cn } from "@/lib/utils";
 import { ConjugationChart } from "./conjugation-chart";
 import { SubjectPicker } from "./subject-picker";
 import { VerbOfDay } from "./verb-of-day";
+import {
+  MASTERY_THRESHOLD,
+  useCellMastery,
+} from "./use-cell-mastery";
 import type {
   AnswersMap,
   CellLang,
@@ -78,6 +82,25 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
   const [hydrated, setHydrated] = useState(false);
 
   const checkPulse = useAnimationControls();
+
+  // ── per-cell mastery (localStorage) ─────────────────────
+  const { mastery, recordVerdicts } = useCellMastery();
+  // rows with BOTH cells mastered for the current verb+subject
+  const masteredRows = new Set<RowKey>();
+  let masteredCount = 0;
+  for (const row of TENSE_ROWS) {
+    const es = mastery[`${verb}|${subject}|${row.key}|es`];
+    const en = mastery[`${verb}|${subject}|${row.key}|en`];
+    if (
+      es &&
+      en &&
+      es.c >= MASTERY_THRESHOLD &&
+      en.c >= MASTERY_THRESHOLD
+    ) {
+      masteredRows.add(row.key);
+      masteredCount++;
+    }
+  }
 
   // ── hydrate persisted state ─────────────────────────────────
   useEffect(() => {
@@ -150,6 +173,35 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
       if (!res.ok) throw new Error(`Request failed with ${res.status}`);
       const data = (await res.json()) as CheckApiResponse;
       setVerdicts(data.verdicts ?? {});
+      // fold the fresh verdicts into the mastery map
+      recordVerdicts(
+        verb,
+        subject,
+        Object.entries(data.verdicts ?? {}).flatMap(([row, cell]) => {
+          const cells: {
+            row: string;
+            lang: string;
+            correct: boolean;
+            accentOnly?: boolean;
+          }[] = [];
+          if (cell?.es) {
+            cells.push({
+              row,
+              lang: "es",
+              correct: cell.es.correct,
+              accentOnly: cell.es.accentOnly,
+            });
+          }
+          if (cell?.en) {
+            cells.push({
+              row,
+              lang: "en",
+              correct: cell.en.correct,
+            });
+          }
+          return cells;
+        })
+      );
       const correct = data.summary?.correctCells ?? 0;
       const total = data.summary?.totalCells ?? 0;
       const percent = total > 0 ? Math.round((correct / total) * 100) : 0;
@@ -183,7 +235,7 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
     } finally {
       setChecking(false);
     }
-  }, [checking, revealMode, verb, subject, answers, toast, checkPulse]);
+  }, [checking, revealMode, verb, subject, answers, toast, checkPulse, recordVerdicts]);
 
   // ── reveal mode: fetch the reference chart ─────────────────
   useEffect(() => {
@@ -427,6 +479,8 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
         verdicts={verdicts}
         revealMode={revealMode}
         revealData={effectiveRevealData}
+        masteredRows={masteredRows}
+        masteredCount={masteredCount}
         onAnswerChange={handleAnswerChange}
         onRequestCheck={handleCheck}
       />
