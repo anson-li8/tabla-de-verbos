@@ -27,6 +27,7 @@ import {
   Loader2,
   RotateCw,
   Square,
+  Volume2,
   WifiOff,
 } from "lucide-react";
 
@@ -43,6 +44,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useSpeech } from "@/hooks/use-speech";
 import { Input } from "@/components/ui/input";
 
 import { checkAnswer } from "@/lib/conjugator/checker";
@@ -51,6 +53,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 import { AccentKeys } from "./accent-keys";
+import { streakBurst } from "./celebrate";
 import { TimerRing } from "./timer-ring";
 import {
   MICRO,
@@ -156,6 +159,9 @@ export function QuizScreen({
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const shakeControls = useAnimationControls();
+
+  // browser-native Spanish pronunciation (Web Speech API)
+  const { speak, speaking, supported } = useSpeech();
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── end flow ───────────────────────────────────────────────
@@ -293,6 +299,7 @@ export function QuizScreen({
       title: `¡racha de ${n}!`,
       description,
     });
+    streakBurst(n);
   };
 
   const submit = () => {
@@ -350,7 +357,13 @@ export function QuizScreen({
   const handleInputKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter") return;
     e.preventDefault();
-    if (phase === "asking") submit();
+    if (phase === "asking") {
+      // Don't let the submitting Enter reach the window listener that
+      // advances after an answer — otherwise a wrong answer flashes
+      // its feedback for a split second and skips ahead on its own.
+      e.stopPropagation();
+      submit();
+    }
     // after an answer, Enter is handled by the window listener
   };
 
@@ -432,6 +445,19 @@ export function QuizScreen({
 
   const accuracyLabel =
     total > 0 ? `${Math.round((score / total) * 100)}%` : "—";
+
+  // what can be spoken aloud — Spanish content only:
+  // before answering, the prompt (verb / Spanish phrase); after
+  // answering, the correct Spanish form where there is one
+  const speechTarget = !question
+    ? null
+    : phase === "asking"
+      ? question.kind === "translate-en-es"
+        ? null
+        : question.promptMain
+      : question.kind === "translate-es-en"
+        ? null
+        : question.displayAnswer;
 
   return (
     <div className="mx-auto w-full max-w-3xl">
@@ -642,6 +668,30 @@ export function QuizScreen({
                 <h2 className="mx-auto max-w-2xl break-words px-2 py-7 text-center font-display text-4xl font-medium leading-[1.08] tracking-tight text-balance sm:py-9 sm:text-5xl lg:text-6xl">
                   {question.promptMain}
                 </h2>
+
+                {/* hear it — browser speech, Spanish content only */}
+                {supported && speechTarget && (
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => speak(speechTarget)}
+                      title="hear it in Spanish"
+                      aria-label="hear it in Spanish"
+                      className={cn(
+                        "flex h-10 items-center gap-1.5 rounded-full border px-3.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors",
+                        speaking
+                          ? "border-primary/50 bg-primary/10 text-primary"
+                          : "border-border/70 text-muted-foreground hover:border-primary/40 hover:text-primary"
+                      )}
+                    >
+                      <Volume2
+                        className={cn("size-3.5", speaking && "animate-pulse")}
+                        aria-hidden="true"
+                      />
+                      escuchar
+                    </button>
+                  </div>
+                )}
 
                 {/* answer input + submit */}
                 <motion.div

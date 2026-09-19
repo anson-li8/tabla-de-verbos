@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BadgeCheck, Check, ChevronsUpDown } from "lucide-react";
+import { BadgeCheck, Check, ChevronsUpDown, EyeOff } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,9 @@ interface VerbPickerProps {
 
 export function VerbPicker({ value, level, onChange, subject, mastery }: VerbPickerProps) {
   const [open, setOpen] = useState(false);
+  const [sortMode, setSortMode] = useState<"alpha" | "mastery">("alpha");
+  const [hideMastered, setHideMastered] = useState(false);
+  const [search, setSearch] = useState("");
 
   // per-verb mastered-row counts for the CURRENT subject — a row
   // counts when both its es and en cells reached the mastery
@@ -93,14 +96,33 @@ export function VerbPicker({ value, level, onChange, subject, mastery }: VerbPic
 
   const groups = useMemo(() => {
     const result: { level: 5 | 6; label: string; verbs: string[] }[] = [];
+    const polish = (verbs: readonly string[]) => {
+      let list = [...verbs];
+      if (hideMastered) {
+        list = list.filter(
+          (verb) => (masteredCounts.get(verb) ?? 0) < TENSE_ROWS.length
+        );
+      }
+      if (sortMode === "mastery") {
+        // least-mastered first — untouched charts stay alphabetical
+        // within the same count (stable sort)
+        list.sort((a, b) => {
+          const ma = masteredCounts.get(a) ?? 0;
+          const mb = masteredCounts.get(b) ?? 0;
+          if (ma !== mb) return ma - mb;
+          return a.localeCompare(b, "es");
+        });
+      }
+      return list;
+    };
     if (level === "all" || level === 5) {
-      result.push({ level: 5, label: "español 5", verbs: [...SP5_VERBS] });
+      result.push({ level: 5, label: "español 5", verbs: polish(SP5_VERBS) });
     }
     if (level === "all" || level === 6) {
-      result.push({ level: 6, label: "español 6", verbs: [...SP6_VERBS] });
+      result.push({ level: 6, label: "español 6", verbs: polish(SP6_VERBS) });
     }
-    return result;
-  }, [level]);
+    return result.filter((g) => g.verbs.length > 0);
+  }, [level, sortMode, hideMastered, masteredCounts]);
 
   // Current verb is kept even when it falls outside the level filter —
   // flag it with a saffron badge so the state is clear.
@@ -158,11 +180,73 @@ export function VerbPicker({ value, level, onChange, subject, mastery }: VerbPic
             normalize(itemValue).includes(normalize(search)) ? 1 : 0
           }
         >
-          <CommandInput placeholder="search verbs or meanings…" />
+          <CommandInput
+            value={search}
+            onValueChange={setSearch}
+            placeholder="search verbs or meanings…"
+          />
+          {/* sort + filter controls (mastery view) */}
+          <div
+            className="flex items-center justify-between gap-2 border-b px-2.5 py-2"
+            role="group"
+            aria-label="Verb list sorting"
+          >
+            <div className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+              <span className="pl-1">sort</span>
+              <button
+                type="button"
+                onClick={() => setSortMode("alpha")}
+                aria-pressed={sortMode === "alpha"}
+                className={cn(
+                  "rounded-md px-1.5 py-1 transition-colors focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-ring/60",
+                  sortMode === "alpha"
+                    ? "bg-primary/10 font-semibold text-primary"
+                    : "hover:bg-foreground/5"
+                )}
+              >
+                a–z
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortMode("mastery")}
+                aria-pressed={sortMode === "mastery"}
+                className={cn(
+                  "rounded-md px-1.5 py-1 transition-colors focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-ring/60",
+                  sortMode === "mastery"
+                    ? "bg-primary/10 font-semibold text-primary"
+                    : "hover:bg-foreground/5"
+                )}
+              >
+                needs work
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setHideMastered((v) => !v)}
+              aria-pressed={hideMastered}
+              title="Hide verbs whose full chart is mastered for this subject"
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-1.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-ring/60",
+                hideMastered
+                  ? "bg-success/10 text-success"
+                    : "text-muted-foreground hover:bg-foreground/5"
+              )}
+            >
+              <EyeOff className="size-3" aria-hidden="true" />
+              hide mastered
+            </button>
+          </div>
           <CommandList className="max-h-72 scrollbar-thin">
-            <CommandEmpty className="py-6 text-center font-mono text-xs text-muted-foreground">
-              no verb matches that search.
-            </CommandEmpty>
+            {search.trim() ? (
+              <CommandEmpty className="py-6 text-center font-mono text-xs text-muted-foreground">
+                no verb matches that search.
+              </CommandEmpty>
+            ) : groups.length === 0 ? (
+              <p className="px-3 py-6 text-center font-mono text-xs text-muted-foreground">
+                every verb in this level is mastered — turn off “hide
+                mastered” to see them again.
+              </p>
+            ) : null}
             {groups.map((group) => (
               <CommandGroup
                 key={group.level}

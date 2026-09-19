@@ -21,6 +21,7 @@ import {
   Target,
   TrendingDown,
   TrendingUp,
+  Volume2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ import {
 
 import { ROW_META, SUBJECTS, type RowKey } from "@/lib/conjugator/types";
 import { useToast } from "@/hooks/use-toast";
+import { useSpeech } from "@/hooks/use-speech";
 import { cn } from "@/lib/utils";
 
 import { AccuracyRing } from "./accuracy-ring";
@@ -496,6 +498,11 @@ function MissRow({
   const pronoun = miss.subject
     ? SUBJECTS.find((s) => s.key === miss.subject)?.pronoun
     : null;
+  const { speak, supported } = useSpeech();
+  // the Spanish side of the miss: the correct form for
+  // conjugation / EN→ES, the prompt phrase for ES→EN
+  const spanishText =
+    miss.kind === "translate-es-en" ? miss.given : miss.expected;
 
   return (
     <div className="px-4 py-3.5 sm:px-5">
@@ -514,6 +521,17 @@ function MissRow({
           <span className={MISS_CHIP}>{tenseLabel}</span>
           <span className={MISS_CHIP}>{kindLabel(miss.kind)}</span>
         </span>
+        {supported && spanishText && (
+          <button
+            type="button"
+            onClick={() => speak(spanishText)}
+            title={`hear ${spanishText}`}
+            aria-label={`hear ${spanishText} in Spanish`}
+            className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-full border border-border/70 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-ring/50"
+          >
+            <Volume2 className="size-3.5" aria-hidden="true" />
+          </button>
+        )}
       </div>
       <dl className="mt-2 space-y-1 text-sm">
         <MissLine label="given" value={miss.given} />

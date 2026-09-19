@@ -120,3 +120,29 @@ export function useCellMastery() {
 
   return { mastery, recordVerdicts };
 }
+
+/**
+ * Count fully-mastered rows (both es + en cells at the threshold)
+ * for a verb+subject pair. Pure — usable anywhere without the hook.
+ */
+export function countMasteredRows(
+  mastery: MasteryMap,
+  verb: string,
+  subject: string,
+  rowKeys: readonly string[]
+): number {
+  let mastered = 0;
+  for (const key of rowKeys) {
+    const es = mastery[`${verb}|${subject}|${key}|es`];
+    const en = mastery[`${verb}|${subject}|${key}|en`];
+    if (
+      es &&
+      en &&
+      es.c >= MASTERY_THRESHOLD &&
+      en.c >= MASTERY_THRESHOLD
+    ) {
+      mastered++;
+    }
+  }
+  return mastered;
+}

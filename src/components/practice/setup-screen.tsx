@@ -10,10 +10,12 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  CloudUpload,
   Infinity as InfinityIcon,
   Languages,
   Loader2,
   Play,
+  RotateCw,
   Timer,
   type LucideIcon,
 } from "lucide-react";
@@ -108,6 +110,12 @@ interface SetupScreenProps {
   sessionsLoading: boolean;
   /** focus analytics (trend / toughest verbs / recent misses) */
   focusStats: FocusStatsResponse | null;
+  /** sessions parked offline, waiting to sync */
+  queuedSessions: number;
+  /** how many parked sessions just synced (flashes a notice) */
+  syncedNotice: number;
+  /** retry the offline-queue flush now */
+  onRetrySync: () => void;
   /** start a focused drill built from the recent miss bank */
   onDrillMisses: () => void;
   /** start a focused drill on a single verb */
@@ -125,6 +133,9 @@ export function SetupScreen({
   sessions,
   sessionsLoading,
   focusStats,
+  queuedSessions,
+  syncedNotice,
+  onRetrySync,
   onDrillMisses,
   onVerbDrill,
   onTenseDrill,
@@ -171,6 +182,60 @@ export function SetupScreen({
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
+      {/* offline session queue — parked sessions + sync state */}
+      <AnimatePresence>
+        {queuedSessions > 0 && (
+          <motion.div
+            key="queue"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warn/40 bg-warn/10 px-4 py-3"
+            role="status"
+          >
+            <p className="flex items-center gap-2.5 text-sm text-foreground">
+              <CloudUpload
+                className="size-4 shrink-0 text-warn"
+                aria-hidden="true"
+              />
+              <span>
+                <span className="font-semibold">
+                  {queuedSessions} session
+                  {queuedSessions === 1 ? "" : "s"}
+                </span>{" "}
+                waiting to sync — saved on this device, sent when you're
+                back online.
+              </span>
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRetrySync}
+              className="h-9 gap-1.5 rounded-lg px-3 font-mono text-[11px] uppercase tracking-[0.12em]"
+            >
+              <RotateCw className="size-3.5" aria-hidden="true" />
+              try now
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {syncedNotice > 0 && (
+          <motion.div
+            key="synced"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="flex items-center gap-2.5 rounded-xl border border-success/40 bg-success/10 px-4 py-3 text-sm"
+            role="status"
+          >
+            <Check className="size-4 shrink-0 text-success" aria-hidden="true" />
+            synced {syncedNotice} offline session
+            {syncedNotice === 1 ? "" : "s"} — your records are up to date.
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* daily goal + racha (needs at least one session on record) */}
       {focusStats && focusStats.totals.sessions > 0 && (
         <DailyStrip

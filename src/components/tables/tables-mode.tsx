@@ -28,6 +28,7 @@ import { ConjugationChart } from "./conjugation-chart";
 import { SubjectPicker } from "./subject-picker";
 import { VerbOfDay } from "./verb-of-day";
 import {
+  countMasteredRows,
   MASTERY_THRESHOLD,
   useCellMastery,
 } from "./use-cell-mastery";
@@ -328,14 +329,40 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
   const handleRandom = useCallback(() => {
     const pool =
       level === "all" ? ALL_VERBS : level === 5 ? SP5_VERBS : SP6_VERBS;
-    const nextVerb = pool[Math.floor(Math.random() * pool.length)];
-    const nextSubject =
-      SUBJECTS[Math.floor(Math.random() * SUBJECTS.length)].key;
-    setVerb(nextVerb);
-    setSubject(nextSubject);
+    // don't re-pick the verb already on the chart
+    const candidates = pool.filter((v) => v !== verb);
+    const verbs = candidates.length > 0 ? candidates : pool;
+    // mastery-aware pick: every verb × subject pair gets a weight of
+    // (un-mastered rows + 1), so charts you've already mastered are
+    // still possible but ~24× less likely than untouched ones. With
+    // no mastery data every pair weighs the same → plain uniform.
+    const rowKeys = TENSE_ROWS.map((r) => r.key);
+    const pairs: { verb: string; subject: SubjectKey; weight: number }[] = [];
+    for (const v of verbs) {
+      for (const s of SUBJECTS) {
+        const mastered = countMasteredRows(mastery, v, s.key, rowKeys);
+        pairs.push({
+          verb: v,
+          subject: s.key,
+          weight: rowKeys.length - mastered + 1,
+        });
+      }
+    }
+    const total = pairs.reduce((sum, p) => sum + p.weight, 0);
+    let roll = Math.random() * total;
+    let pick = pairs[pairs.length - 1];
+    for (const p of pairs) {
+      roll -= p.weight;
+      if (roll <= 0) {
+        pick = p;
+        break;
+      }
+    }
+    setVerb(pick.verb);
+    setSubject(pick.subject);
     setAnswers({});
     setVerdicts({});
-  }, [level]);
+  }, [level, mastery, verb]);
 
   const handleRevealToggle = useCallback(() => {
     setRevealMode((prev) => !prev);
@@ -462,14 +489,21 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
               {revealMode ? "hide" : "reveal"}
             </Button>
 
-            <Button
-              variant="outline"
-              onClick={handleRandom}
-              className="h-11 rounded-xl px-4 font-mono text-xs uppercase tracking-[0.14em]"
-            >
-              <Dices className="size-4" aria-hidden="true" />
-              random
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={handleRandom}
+                  className="h-11 rounded-xl px-4 font-mono text-xs uppercase tracking-[0.14em]"
+                >
+                  <Dices className="size-4" aria-hidden="true" />
+                  random
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Weighted toward charts you haven't mastered yet.
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </Card>

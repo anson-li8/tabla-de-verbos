@@ -431,3 +431,51 @@ Work Log:
 - StrictMode double-invokes the prefetch effect in dev → duplicate /api/practice/question calls per question (harmless, dev-only, explains the extra fetch logs in QA).
 - Next-round candidate features (priority): (1) mastery-aware "random" — bias RANDOM toward un-mastered verbs/subjects in Tables; (2) practice-mode streak milestone confetti burst (toasts exist, no confetti at 5/10); (3) verb-picker "hide mastered" toggle + sort-by-mastery option; (4) cross-tab mastery sync via BroadcastChannel (still low priority); (5) offline queue for unsaved sessions (currently sessions answered offline are lost — only generated locally, save fails silently).
 - QA artifacts: /home/z/my-project/qa/r7-*.png (17 files).
+
+---
+Task ID: 8 (cron review round 8)
+Agent: cron-webDevReview
+Task: Continuous improvement round 8 — status assessment, agent-browser QA, wrong-answer auto-advance BUG FIX, mastery-aware random, verb-picker sort/filter, streak confetti, offline session queue, Web-Speech pronunciation, styling polish
+
+## Current project status / assessment
+- Baseline at round start: dev server healthy on :3000 (HTTP 200), lint clean, tsc clean (src/), engine PASS 13400/13400, DB 0 sessions, dev.log clean. Named session `r8-qa` used (all stray sessions closed first).
+
+## Goals / completed modifications / verification results
+1. BUG FOUND & FIXED — wrong answers auto-advanced (~300ms) without Enter:
+   - Symptom: after a wrong answer, "answer: X" flashed for a split second and the quiz skipped ahead on its own; "press enter to continue" never persisted (verified with 100ms DOM polling + a window keydown capture counter showing only ONE Enter event).
+   - Root cause: the submitting Enter bubbles to window; React adds the phase-change window keydown listener (advance-after-answer) fast enough that the SAME still-bubbling native event hits it → advance() fires immediately.
+   - Fix: `handleInputKeyDown` in quiz-screen.tsx now calls `e.stopPropagation()` before `submit()` in the "asking" branch only (post-answer Enter still bubbles to the window listener, so the intended flow is untouched).
+   - VERIFIED: wrong answer → feedback + "PRESS ENTER TO CONTINUE" persists indefinitely → explicit Enter advances; correct answers still auto-advance (550ms); accent path unaffected; full timed session → results end-to-end re-verified.
+2. FEATURE — mastery-aware RANDOM (Tables):
+   - use-cell-mastery.ts: new pure `countMasteredRows(mastery, verb, subject, rowKeys)` helper (shared with the picker).
+   - handleRandom now builds all verb × subject pairs (excluding the current verb), weights each `un-mastered rows + 1` (no mastery data → uniform; fully-mastered pair ≈ 24× less likely), weighted-random pick; random button gained a Tooltip ("Weighted toward charts you haven't mastered yet").
+   - VERIFIED: seeded mastery in localStorage + reload → 6 random clicks never re-picked the current verb; verb+subject both change.
+3. FEATURE — verb-picker mastery sort + hide-mastered:
+   - New controls row under the search input: `sort: a–z | needs work` + `hide mastered` (EyeOff icon). "needs work" = stable sort by mastered count ASC (least-mastered first, alphabetical ties); hide-mastered filters fully-mastered charts (23/23) for the current subject; dedicated empty states (search miss vs. "every verb is mastered — turn off hide mastered"); footer count adapts to the filtered list; focus-visible rings on all three controls; local `search` state for correct empty-state switching.
+   - VERIFIED: hablar 5/23 → counter "5/23", needs-work sort moves it to LAST in its group (idx 27); full 23/23 seed + hide-mastered → 51 verbs, hablar hidden, footer "1/51".
+4. FEATURE — streak milestone confetti (Practice):
+   - New src/components/practice/celebrate.ts: `streakBurst(n)` — 5: center pop (40 particles); 10: double side cannons (55 each); 15+: side cannons + delayed center burst; brand colors, disableForReducedMotion, try/catch-guarded, zIndex 60. Called from streakToast at every multiple of 5.
+   - VERIFIED: confetti canvas caught live 0.75s after the streak-10 answer; streak counter 6→10 with correct/skip flows intact (a wrong answer mid-test reset it, as designed).
+5. FEATURE — offline session queue:
+   - New src/components/practice/session-queue.ts: enqueueSession/queuedSessionCount/flushQueue (localStorage "tdv-session-queue", cap 20, oldest-first flush, stops at first failure).
+   - practice-mode.tsx: saveSession failure → enqueue (banner count state); flush attempts on mount + window "online" event; after flush → refreshSessions + 5s "synced N offline session(s)" notice. SetupScreen: warn banner (CloudUpload + "N sessions waiting to sync" + "try now" retry button) + success notice, both animated.
+   - VERIFIED end-to-end via fetch interception: end session while "offline" → parked (queueLen 888 chars) → setup shows "1 session waiting to sync" → back online + "try now" → "synced 1 offline session — your records are up to date", queue empty, row in SQLite (15 questions / 11 score).
+6. FEATURE — pronunciation via Web Speech API (TTS SDK is 401 — "missing X-Token", same as round 7; pivoted to browser-native):
+   - New src/hooks/use-speech.ts: useSpeech() — es-ES lang, rate 0.92, best-voice pick (es-ES → any es → null) with voiceschanged refresh, cancel-on-unmount, `supported` flag (speechSynthesis in window), all try/catch-guarded.
+   - Quiz: "escuchar" pill button under the prompt — speaks promptMain for conjugation + ES→EN (hidden for EN→ES pre-answer; post-answer it speaks the Spanish displayAnswer for conjugation + EN→ES); speaking state pulses primary.
+   - Tables chart header: "oír" outline button (speaks the verb, Tooltip); REVEAL mode: every Spanish answer form is now an underlined button (decoration-primary/35, hover full) that speaks it.
+   - Verb-of-day: ghost speaker icon next to the actions (speaks the day's verb).
+   - Results misses: each miss row gains a compact speaker (speaks the Spanish side — expected for conjugation/EN→ES, given for ES→EN).
+   - VERIFIED: buttons render in all four surfaces in a speechSynthesis-capable browser (headless Chromium), clicks no-op safely with zero voices, zero console/page errors; in real browsers with Spanish voices it speaks.
+7. STYLING (mandatory):
+   - Toasts: rounded-md → rounded-xl + ToastTitle now `font-display text-base font-semibold italic` ("Flawless so far" renders in Fraunces italic — VERIFIED live on the check-flow toast).
+   - Focus-visible rings on the three new picker controls; escuchar/oír/speak buttons all have focus-visible + hover + speaking states.
+8. QA/verification: engine PASS 13397/13397 (varies ±few across runs — randomized quiz tests, all pass); lint clean; tsc clean (src/); mobile 390px 0 overflow offenders BOTH modes (dark+light); dark mode verified (bg lab(4.04…), toggle works both directions); fresh-browser relaunch = ZERO console errors; DB cleaned to 0 sessions; QA localStorage seeds cleared; light theme + desktop restored; dev.log clean.
+
+## Unresolved issues / risks / next-round priorities
+- QA-harness lesson (re-learned): reading DOM synchronously after batched state updates returns STALE values (6 random clicks all "returned" the old verb — the final state was correct; always re-read after a delay or event). Also radix toasts ≠ [data-sonner-toast] (wrong selector family — use `[data-radix-toast-viewport] li` or ol li[data-state]).
+- The wrong-answer fix relies on stopPropagation halting native propagation at React's root — verified working in Chromium; if a future React version changes discrete-event effect timing, re-test the wrong-answer wait behavior.
+- Web Speech quality depends on the user's OS/browser voices (no Spanish voice → silent no-op with the button still present). Acceptable: all major platforms ship Spanish voices; the buttons pulse on `speaking` state for feedback.
+- TTS/z-ai SDK still 401 (rounds 7-8) — a server-side audio feature remains blocked until credentials exist.
+- Next-round candidate features (priority): (1) quiz "slow mode" — reveal-mode study flashcards from the verb catalogue (self-paced browse of all 23 forms with the new speak buttons); (2) per-tense progress sparkline on Tables (chart-header mini bar of mastered/23 per group); (3) streak-freeze/restore ("practice streak insurance" — a streak survives one missed day once per week); (4) share card: include the escuchar idea — a QR/link for a public practice profile (needs an endpoint; currently single-user); (5) verb picker: jump-to-first-letter sections (A–Z rail) for faster browsing.
+- QA artifacts: /home/z/my-project/qa/r8-*.png (5 files).

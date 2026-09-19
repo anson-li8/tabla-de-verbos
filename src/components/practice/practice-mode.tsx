@@ -14,6 +14,11 @@ import { QuizScreen } from "./quiz-screen";
 import { ResultsScreen } from "./results-screen";
 import { SetupScreen } from "./setup-screen";
 import {
+  flushQueue,
+  enqueueSession,
+  queuedSessionCount,
+} from "./session-queue";
+import {
   DEFAULT_SETTINGS,
   buildDrillSettings,
   fetchFocusStats,
@@ -88,6 +93,11 @@ export default function PracticeMode({
   /** short label for the results mode line ("miss drill" / "verb drill") */
   const [drillShort, setDrillShort] = useState<string | null>(null);
 
+  /** sessions parked because the save failed (offline) — waiting to sync */
+  const [queuedSessions, setQueuedSessions] = useState(0);
+  /** "N queued sessions just synced" — flashes on the setup screen */
+  const [syncedNotice, setSyncedNotice] = useState(0);
+
   const clearDrill = useCallback(() => {
     setDrill(null);
     setDrillLabel(null);
@@ -136,6 +146,32 @@ export default function PracticeMode({
   useEffect(() => {
     void refreshSessions();
   }, [refreshSessions]);
+
+  // ── offline session queue: flush parked sessions when online ──
+  const tryFlushQueue = useCallback(
+    async (announce = false) => {
+      const { synced, remaining } = await flushQueue(saveSession);
+      setQueuedSessions(remaining);
+      if (synced > 0) {
+        await refreshSessions();
+        if (announce) {
+          setSyncedNotice(synced);
+          const t = setTimeout(() => setSyncedNotice(0), 5000);
+          void t;
+        }
+      }
+    },
+    [refreshSessions]
+  );
+
+  // flush on mount + whenever the connection comes back
+  useEffect(() => {
+    setQueuedSessions(queuedSessionCount());
+    void tryFlushQueue(true);
+    const onOnline = () => void tryFlushQueue(true);
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [tryFlushQueue]);
 
   const handleSettingsChange = (next: QuizSettings) => {
     setSettings(next);
@@ -243,7 +279,8 @@ export default function PracticeMode({
       try {
         await saveSession(s);
       } catch {
-        // silent — results still render, session just isn't saved
+        // offline (or server down) — park the session so it syncs later
+        setQueuedSessions(enqueueSession(s));
       }
       setSummary(s);
       setScreen("results");
@@ -272,6 +309,9 @@ export default function PracticeMode({
               sessions={sessions}
               sessionsLoading={sessionsLoading}
               focusStats={focusStats}
+              queuedSessions={queuedSessions}
+              syncedNotice={syncedNotice}
+              onRetrySync={() => void tryFlushQueue(true)}
               onDrillMisses={() =>
                 handleDrillMisses(focusStats?.recentMisses ?? [])
               }

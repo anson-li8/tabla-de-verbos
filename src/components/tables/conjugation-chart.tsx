@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, BadgeCheck, BookOpen, Check, Zap } from "lucide-react";
+import { AlertTriangle, BadgeCheck, BookOpen, Check, Volume2, Zap } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSpeech } from "@/hooks/use-speech";
 import {
   Tooltip,
   TooltipContent,
@@ -166,28 +167,44 @@ function InputCell({
 function AnswerCell({
   forms,
   spanish,
+  onSpeak,
 }: {
   forms: string[] | undefined;
   spanish?: boolean;
+  /** when provided, the primary form can be heard aloud */
+  onSpeak?: (text: string) => void;
 }) {
   if (!forms || forms.length === 0) {
     return <p className="py-1.5 font-mono text-xs text-muted-foreground">—</p>;
   }
   const [primary, ...alternates] = forms;
   const altText = alternates.slice(0, 3).join(" · ");
+  const primaryLine = onSpeak ? (
+    <button
+      type="button"
+      onClick={() => onSpeak(primary)}
+      title="click to hear it"
+      aria-label={`hear ${primary} in Spanish`}
+      className="min-w-0 max-w-full cursor-pointer truncate rounded-sm bg-transparent text-left font-display text-lg font-medium leading-snug underline decoration-primary/35 decoration-1 underline-offset-4 transition-colors hover:decoration-primary focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-primary/30"
+    >
+      {primary}
+    </button>
+  ) : (
+    <p
+      className={cn(
+        "truncate",
+        spanish
+          ? "font-display text-lg font-medium leading-snug"
+          : "font-display text-base leading-snug"
+      )}
+      title={primary}
+    >
+      {primary}
+    </p>
+  );
   return (
     <div className="min-w-0 py-0.5">
-      <p
-        className={cn(
-          "truncate",
-          spanish
-            ? "font-display text-lg font-medium leading-snug"
-            : "font-display text-base leading-snug"
-        )}
-        title={primary}
-      >
-        {primary}
-      </p>
+      {primaryLine}
       {altText && (
         <p
           className="truncate font-mono text-[11px] leading-snug text-muted-foreground"
@@ -243,6 +260,9 @@ export function ConjugationChart({
   onQuizVerb,
 }: ConjugationChartProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
+
+  // browser-native Spanish pronunciation (Web Speech API)
+  const { speak, speaking, supported } = useSpeech();
 
   const subjectMeta = SUBJECTS.find((entry) => entry.key === subject);
 
@@ -334,6 +354,26 @@ export function ConjugationChart({
                 <BadgeCheck className="size-3" aria-hidden="true" />
                 {masteredCount}/{TENSE_ROWS.length} mastered
               </Badge>
+            )}
+            {supported && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => speak(verb)}
+                    aria-label={`hear ${verb} in Spanish`}
+                    className={cn(
+                      "h-7 gap-1.5 rounded-lg border-primary/30 px-2.5 font-mono text-[10px] uppercase tracking-[0.12em] text-primary hover:border-primary/50 hover:bg-primary/5",
+                      speaking && "animate-pulse border-primary/60"
+                    )}
+                  >
+                    <Volume2 className="size-3" aria-hidden="true" />
+                    oír
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>hear {verb} pronounced</TooltipContent>
+              </Tooltip>
             )}
             {onQuizVerb && (
               <Tooltip>
@@ -446,7 +486,11 @@ export function ConjugationChart({
                         {revealMode ? (
                           revealRow ? (
                             <>
-                              <AnswerCell spanish forms={revealRow.spanish} />
+                              <AnswerCell
+                                spanish
+                                forms={revealRow.spanish}
+                                onSpeak={supported ? speak : undefined}
+                              />
                               <AnswerCell forms={revealRow.english} />
                             </>
                           ) : (

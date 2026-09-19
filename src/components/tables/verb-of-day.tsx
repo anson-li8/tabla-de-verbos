@@ -8,12 +8,14 @@
 // ─────────────────────────────────────────────────────────────
 
 import { motion } from "framer-motion";
-import { ArrowRight, Check, Sunrise, Zap } from "lucide-react";
+import { ArrowRight, Check, Sunrise, Volume2, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useSpeech } from "@/hooks/use-speech";
 
 import { conjugateOne } from "@/lib/conjugator/engine";
 import { ALL_VERBS, verbGlosses } from "@/lib/conjugator/types";
+import { cn } from "@/lib/utils";
 
 /** deterministic daily pick — local midnight, full catalogue cycle */
 function todaysVerb(): string {
@@ -73,6 +75,7 @@ export function VerbOfDay({ current, onPick, onQuiz }: VerbOfDayProps) {
   const isCurrent = verb === current;
   const teaser = buildTeaser(verb);
   const archive = recentVerbs(6);
+  const speech = useSpeech();
   const dateLabel = new Date().toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -126,6 +129,21 @@ export function VerbOfDay({ current, onPick, onQuiz }: VerbOfDayProps) {
           </dl>
 
           <div className="flex items-center gap-2.5">
+            {speech.supported && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => speech.speak(verb)}
+                aria-label={`hear ${verb} in Spanish`}
+                title={`hear ${verb}`}
+                className="size-11 rounded-xl text-muted-foreground hover:text-primary"
+              >
+                <Volume2
+                  className={cn("size-4", speech.speaking && "animate-pulse")}
+                  aria-hidden="true"
+                />
+              </Button>
+            )}
             <Button
               variant={isCurrent ? "outline" : "default"}
               size="sm"
