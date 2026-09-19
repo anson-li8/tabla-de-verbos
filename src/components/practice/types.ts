@@ -1,6 +1,8 @@
 // ─────────────────────────────────────────────────────────────
 // Tabla de Verbos — Practice mode: shared client-side types,
-// constants, formatters and API fetchers.
+// constants, formatters and the local question generator.
+// (Session persistence lives in ./session-store — the app is
+// fully static: no server, everything on this device.)
 // ─────────────────────────────────────────────────────────────
 
 import {
@@ -112,7 +114,7 @@ export interface SessionsResponse {
   stats: SessionStats;
 }
 
-// ── Focus analytics (GET /api/sessions/stats) ───────────────
+// ── Focus analytics (fetchFocusStats in ./session-store) ───
 
 /** one point of the accuracy trend (a finished session) */
 export interface FocusTrendPoint {
@@ -421,18 +423,7 @@ export function tallyTotal(tally: TenseTally): number {
   return Object.values(tally).reduce((a, e) => a + e.t, 0);
 }
 
-// ── API fetchers (contracts owned by Task 3-a) ───────────────
-
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) throw new Error(`${url} failed with ${res.status}`);
-  return (await res.json()) as T;
-}
+// ── Question generation (local — pure shared code) ──────────
 
 function validateQuestion(q: Question): Question {
   if (
@@ -442,78 +433,40 @@ function validateQuestion(q: Question): Question {
     typeof q.displayAnswer !== "string" ||
     !Array.isArray(q.answers)
   ) {
-    throw new Error("malformed question from /api/practice/question");
+    throw new Error("malformed question from the generator");
   }
   return q;
 }
 
-/** a fetched question + where it came from (API or offline fallback) */
+/** a generated question + where it came from. The app is fully
+ *  local now, so questions are ALWAYS generated on the device —
+ *  `offline` stays in the contract for the quiz's banner (which
+ *  now tracks the browser's connection only). */
 export interface QuestionFetch {
   question: Question;
-  /** true when /api/practice/question was unreachable and the
-   *  question was generated locally (offline PWA practice) */
+  /** always false in the static app — generation is local and
+   *  instant; kept for the PWA offline-banner contract */
   offline: boolean;
 }
 
-/** POST /api/practice/question → next Question + its source.
- *  Falls back to local generation when the API is unreachable
- *  (offline PWA shell) — the generator is pure, shared code. */
+/** generate the next practice question on this device. */
 export async function fetchQuestionDetailed(
   settings: QuizSettings
 ): Promise<QuestionFetch> {
-  try {
-    const q = await postJson<Question>("/api/practice/question", settings);
-    return { question: validateQuestion(q), offline: false };
-  } catch {
-    return { question: generateQuestion(settings), offline: true };
-  }
+  return {
+    question: validateQuestion(generateQuestion(settings)),
+    offline: false,
+  };
 }
 
-/** POST /api/practice/question → next Question (source-agnostic). */
+/** generate the next Question (source-agnostic wrapper). */
 export async function fetchQuestion(settings: QuizSettings): Promise<Question> {
   return (await fetchQuestionDetailed(settings)).question;
 }
 
-/** GET /api/sessions?limit=8 → { recent, stats } */
-export async function fetchSessions(): Promise<SessionsResponse> {
-  const res = await fetch("/api/sessions?limit=8", {
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) throw new Error(`/api/sessions failed with ${res.status}`);
-  const data = (await res.json()) as SessionsResponse;
-  if (!data || !Array.isArray(data.recent) || !data.stats) {
-    throw new Error("malformed sessions response");
-  }
-  return data;
-}
-
-/** GET /api/sessions/stats → focus analytics (trend, hardest verbs, misses) */
-export async function fetchFocusStats(): Promise<FocusStatsResponse> {
-  const res = await fetch("/api/sessions/stats", {
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) {
-    throw new Error(`/api/sessions/stats failed with ${res.status}`);
-  }
-  const data = (await res.json()) as FocusStatsResponse;
-  if (
-    !data ||
-    !Array.isArray(data.trend) ||
-    !Array.isArray(data.hardestVerbs) ||
-    !Array.isArray(data.hardestTenses) ||
-    !Array.isArray(data.recentMisses) ||
-    !data.daily ||
-    !data.totals
-  ) {
-    throw new Error("malformed focus stats response");
-  }
-  return data;
-}
-
-/** POST /api/sessions — persist a finished session */
-export function saveSession(summary: SessionSummary): Promise<unknown> {
-  return postJson<unknown>("/api/sessions", summary);
-}
+// Session persistence (fetchSessions / fetchFocusStats /
+// saveSession / claimStreakFreeze / export·import·clear) lives in
+// ./session-store — everything runs against localStorage.
 
 /** re-exported so setup can show counts without importing data directly */
 export const VERB_COUNTS = {

@@ -2,8 +2,8 @@
 
 // ─────────────────────────────────────────────────────────────
 // useDailyGoal — user-configurable daily practice goal, persisted
-// to localStorage ("tdv-daily-goal"). Falls back to the server's
-// goal constant until the user picks one.
+// to localStorage ("tdv-daily-goal"). Falls back to the default
+// constant (session-store's DAILY_GOAL) until the user picks one.
 //
 // The lazy initializer is hydration-safe: the goal only feeds
 // components that render after client-side data loads (the daily
@@ -29,7 +29,7 @@ function readStoredGoal(): number | null {
 }
 
 /**
- * @param serverGoal the goal constant from GET /api/sessions/stats
+ * @param serverGoal the goal constant (session-store's DAILY_GOAL)
  * @returns the effective goal + a saver (clamped to the presets)
  */
 export function useDailyGoal(serverGoal: number) {
@@ -53,7 +53,7 @@ export function useDailyGoal(serverGoal: number) {
   );
 
   return {
-    /** effective goal (user pick, else the server constant) */
+    /** effective goal (user pick, else the default constant) */
     goal: override ?? serverGoal,
     /** the user's explicit pick, if any (null = default) */
     userGoal: override,

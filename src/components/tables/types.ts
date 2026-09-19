@@ -15,7 +15,7 @@ export interface CellAnswer {
 
 export type AnswersMap = Partial<Record<RowKey, CellAnswer>>;
 
-/** per-cell verdict returned by POST /api/check */
+/** per-cell verdict returned by checkChart (tables/chart-check) */
 export interface VerdictEs {
   correct: boolean;
   accentOnly: boolean;
@@ -34,7 +34,7 @@ export interface CellVerdict {
 
 export type VerdictsMap = Partial<Record<RowKey, CellVerdict>>;
 
-/** one row of POST /api/conjugate */
+/** one row of conjugateChart (tables/chart-check) */
 export interface ConjugateRowData {
   key: RowKey;
   spanish: string[];
@@ -43,13 +43,13 @@ export interface ConjugateRowData {
 
 export type RevealData = Partial<Record<RowKey, { spanish: string[]; english: string[] }>>;
 
-/** POST /api/check response */
+/** checkChart response (local grading) */
 export interface CheckApiResponse {
   verdicts: VerdictsMap;
   summary: { correctCells: number; totalCells: number };
 }
 
-/** POST /api/conjugate response */
+/** conjugateChart response (local engine) */
 export interface ConjugateApiResponse {
   verb: string;
   subject: SubjectKey;

@@ -2,7 +2,7 @@
 
 // ─────────────────────────────────────────────────────────────
 // FocusPanel — setup-screen analytics card fed by
-// GET /api/sessions/stats: an animated accuracy sparkline over
+// fetchFocusStats (session-store): an animated accuracy sparkline over
 // the last 14 sessions, the toughest-verbs chips and a one-tap
 // "drill my misses" quick start. Hidden until the first session
 // exists (the records strip owns the true empty state).

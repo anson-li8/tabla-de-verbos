@@ -2,7 +2,7 @@
 
 // ─────────────────────────────────────────────────────────────
 // ActivityHeatmap — a GitHub-style practice calendar fed by the
-// sparse `days` array from GET /api/sessions/stats. 24 Monday-
+// sparse `days` array from fetchFocusStats (session-store). 24 Monday-
 // aligned week columns × 7 weekday rows; intensity is relative to
 // the (user-configurable) daily goal. Hover a cell for the day's
 // question count.

@@ -1,49 +1,31 @@
 // ─────────────────────────────────────────────────────────────
-// POST /api/check — grade a filled-in verb chart
-// Body: { verb, subject, answers: Record<RowKey, { es?, en? }> }
-//   (cells may be partial or empty — only filled cells are graded)
-// → {
-//     verdicts: { [rowKey]: { es?: {correct, accentOnly, expected},
-//                             en?: {correct, expected} } },
-//     summary:  { correctCells, totalCells }
-//   }
+// chart-check — local grading for the fill-in conjugation chart.
+//
+// Faithful port of the former POST /api/check and
+// POST /api/conjugate routes: the conjugation engine and answer
+// checker are pure, shared code, so grading happens right here
+// on the device — no server round-trip, instant feedback.
 // ─────────────────────────────────────────────────────────────
 
-import { NextResponse } from "next/server";
-import { z } from "zod";
-
-import { conjugate, type ConjugationRow } from "@/lib/conjugator/engine";
-import { VERBS, type RowKey, type SubjectKey } from "@/lib/conjugator/types";
+import {
+  conjugate,
+  type ConjugationRow,
+} from "@/lib/conjugator/engine";
+import {
+  VERBS,
+  type RowKey,
+  type SubjectKey,
+} from "@/lib/conjugator/types";
 import { checkAnswer, normalizeEs, stripAccents } from "@/lib/conjugator/checker";
 
-export const dynamic = "force-dynamic";
-
-const SUBJECT_ENUM = z.enum(["yo", "tu", "el", "nosotros", "vosotros", "ellos"]);
-
-const bodySchema = z.object({
-  verb: z.string(),
-  subject: SUBJECT_ENUM,
-  answers: z
-    .record(
-      z.string(),
-      z.object({
-        es: z.string().optional(),
-        en: z.string().optional(),
-      })
-    )
-    .optional(),
-});
-
-/** per-cell verdict shapes (consumed by src/components/tables/types.ts) */
-interface VerdictEs {
-  correct: boolean;
-  accentOnly: boolean;
-  expected: string;
-}
-interface VerdictEn {
-  correct: boolean;
-  expected: string;
-}
+import type {
+  AnswersMap,
+  CheckApiResponse,
+  ConjugateApiResponse,
+  RevealData,
+  VerdictEn,
+  VerdictEs,
+} from "./types";
 
 /**
  * Short display string for the expected answer: the canonical form plus up
@@ -103,41 +85,21 @@ function gradeEnglish(
   return { verdict: { correct, expected: displayExpected(row.english) }, correct };
 }
 
-export async function POST(request: Request) {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json(
-      { error: "Request body must be valid JSON" },
-      { status: 400 }
-    );
-  }
-
-  const parsed = bodySchema.safeParse(body);
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0];
-    const path = issue?.path.join(".");
-    return NextResponse.json(
-      {
-        error: `Invalid ${path || "body"}: ${issue?.message ?? "expected { verb, subject, answers }"}`,
-      },
-      { status: 400 }
-    );
-  }
-
-  const { verb, subject } = parsed.data;
+/**
+ * Grade a filled-in chart (only filled cells are graded).
+ * Same shape the old POST /api/check returned.
+ */
+export function checkChart(
+  verb: string,
+  subject: SubjectKey,
+  answers: AnswersMap
+): CheckApiResponse {
   if (!Object.hasOwn(VERBS, verb)) {
-    return NextResponse.json(
-      { error: `Unknown verb "${verb}" — see GET /api/verbs for the list` },
-      { status: 400 }
-    );
+    return { verdicts: {}, summary: { correctCells: 0, totalCells: 0 } };
   }
 
-  const answers = parsed.data.answers ?? {};
-  const rows = conjugate(verb, subject as SubjectKey);
-
-  const verdicts: Partial<Record<RowKey, { es?: VerdictEs; en?: VerdictEn }>> = {};
+  const rows = conjugate(verb, subject);
+  const verdicts: CheckApiResponse["verdicts"] = {};
   let correctCells = 0;
   let totalCells = 0;
 
@@ -164,12 +126,46 @@ export async function POST(request: Request) {
     // unfilled cells are omitted entirely — the UI only shows
     // feedback for cells the learner actually attempted
     if (cellVerdict.es || cellVerdict.en) {
-      verdicts[row.key] = cellVerdict;
+      verdicts[row.key as RowKey] = cellVerdict;
     }
   }
 
-  return NextResponse.json({
+  return {
     verdicts,
     summary: { correctCells, totalCells },
-  });
+  };
+}
+
+/** full 23-row reference chart (the old POST /api/conjugate) */
+export function conjugateChart(
+  verb: string,
+  subject: SubjectKey
+): ConjugateApiResponse {
+  const rows = conjugate(verb, subject);
+  return {
+    verb,
+    subject,
+    rows: rows.map((row) => ({
+      key: row.key,
+      spanish: Array.isArray(row.spanish) ? row.spanish : [],
+      english: Array.isArray(row.english) ? row.english : [],
+    })),
+  };
+}
+
+/** reveal-mode lookup map for the current verb + subject */
+export function buildRevealData(
+  verb: string,
+  subject: SubjectKey
+): RevealData | null {
+  if (!Object.hasOwn(VERBS, verb)) return null;
+  const data = conjugateChart(verb, subject);
+  const map: RevealData = {};
+  for (const row of data.rows) {
+    map[row.key] = {
+      spanish: Array.isArray(row.spanish) ? row.spanish : [],
+      english: Array.isArray(row.english) ? row.english : [],
+    };
+  }
+  return map;
 }

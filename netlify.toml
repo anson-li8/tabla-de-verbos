@@ -1,0 +1,25 @@
+# Tabla de Verbos — Netlify deployment
+#
+# The app is a fully static Next.js export (output: "export"):
+# `next build` emits the complete site into ./out — no server,
+# no API routes, no database. Plain static hosting is all it needs.
+
+[build]
+  command = "npm run build"
+  publish = "out"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# the service worker must always be revalidated so PWA updates
+# land as soon as they're deployed
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# long-cache the hashed build assets
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

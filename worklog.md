@@ -564,3 +564,53 @@ Work Log:
 - specialForms.pret vosotros derivation assumes the tú form ends in "ste" (true for all 14 irregular-preterite verbs in the data); if future verbs break that pattern, extend their pret arrays to 6 entries explicitly.
 - Next-round candidates (from r9 list, still open): flashcards per-card self-grade feeding spaced-repetition-lite ordering; cross-mode handoff ("study this verb in cards" from Tables); share-card public profile (blocked on single-user); re-run VLM visual pass on all three modes with NEUTRAL prompts.
 - Practice tenses still exclude the vos_pos/vos_neg COMMAND rows by design (PRACTICE_TENSES) — vosotros commands are only quizzed indirectly via the chart; a future round could add an opt-in "imperativos" preset including vos commands.
+
+---
+Task ID: s1 (static-architecture round)
+Agent: main-orchestrator (direct)
+Task: User request — make the app fully static and deployable WITHOUT the database (store everything on localStorage/cookies; drop-in git repo deployable via Netlify).
+
+## Current project status / assessment
+- Baseline at round start: r10 complete (vosotros subject + ruled-lines fix + UI ease-of-use), dev server healthy on :3000, engine 13.4k checks passing, app fully server-backed (7 API routes + Prisma SQLite `PracticeSession`/`StreakFreeze`).
+
+## Goals / completed modifications / verification results
+1. NEW `src/components/practice/session-store.ts` — the app's entire persistence layer on localStorage, a faithful 1:1 port of all four former server endpoints (same normalization caps, same constants, same error strings):
+   - `saveSession` (ex-POST /api/sessions): clamp/cap validation, misses ≤ 50, tally caps, chronological append, MAX_SESSIONS 600 cap + quota-shedding writes (drop oldest quarter + retry on QuotaExceededError).
+   - `fetchSessions` (ex-GET /api/sessions): recent slice (newest-first) + all-time aggregates (best acc/score/streak, avg acc, total questions, question-weighted avg ms).
+   - `fetchFocusStats` (ex-GET /api/sessions/stats): trend 14 + trendDelta, hardest verbs 8 (newest-first sighting logic), shakiest tenses 4 (≥5 answers), slowestTense (≥1.35× + ≥1.5s + >1 candidate), bestHour buckets (≥2 sessions, ≥8pt gap), recentMisses (≤30 of last 15), daily block (today/streak/bestStreak/activeToday/freezeOffer/freezableStreak/frozenYesterday/168-day heatmap) — streak math honors freeze bridges exactly like the server.
+   - `claimStreakFreeze` (ex-POST /api/streak-freeze): all 4 validations with identical error messages incl. the "next one unlocks <date>" rate-limit text; freezes stored as day-keys in `tdv-freezes`.
+   - NEW data-portability trio (local-first feature): `exportPracticeData` (versioned JSON blob), `importPracticeData` (merge + dedupe by id/frozenFor, defensive parsing), `clearPracticeData` — all dispatch a `tdv-data-changed` window event.
+2. NEW `src/components/tables/chart-check.ts` — local grading port of /api/check + /api/conjugate (`checkChart`, `conjugateChart`, `buildRevealData`), pure + synchronous, same response shapes (accentOnly verdicts, displayExpected 3-variant join, accentedExpected fallback).
+3. tables-mode.tsx: check now grades locally (instant — spinner state kept as a no-op guard); reveal mode is a `useMemo` (buildRevealData) — removed the fetch effect, revealing/revealData/revealKey states, the reveal-button spinner + disabled, and the "Couldn't reach the server" toasts.
+4. practice/types.ts: `fetchQuestionDetailed` now generates locally (pure `generateQuestion`, `offline` always false — kept for the quiz banner contract which now tracks browser connection only); removed `postJson`/`fetchSessions`/`fetchFocusStats`/`saveSession` (moved to session-store).
+5. practice-mode.tsx: imports fetchers from session-store; REMOVED the entire offline-queue wiring (session-queue.ts deleted, queue/synced props dropped — with local persistence a failed save means localStorage itself is unavailable, so the queue could never flush; save failure is now a silent no-op with a comment); `handleClaimFreeze` returns `{ok, error?}` (was boolean) and surfaces the specific claim error; listens for `tdv-data-changed` → live refresh; removed `initialOffline` state.
+6. setup-screen.tsx: dropped queuedSessions/syncedNotice/onRetrySync props + both banner blocks (queue + synced) + CloudUpload/RotateCw imports.
+7. daily-strip.tsx: claim error now shows the SPECIFIC message from claimStreakFreeze (was a generic line) — e.g. "Only one freeze per week — the next one unlocks <date>."
+8. NEW FEATURE — help-dialog "tus datos · 100% local" section: exportar (dated JSON download via Blob), importar (hidden file input + FileReader + toast), borrar todo (AlertDialog confirm + wipe + toast); dialog gained `max-h-[85vh] overflow-y-auto` (was unbounded).
+9. DELETED the entire server layer: `src/app/api/` (7 routes), `src/lib/db.ts`, `prisma/`, `db/custom.db`, `.env` (DATABASE_URL), 5 db-dependent scripts (check-db, clean-qa-data, clean-sessions, seed-days, seed-freeze-scenario). Kept verify-engine/verify-vosotros/gen-icons (pure).
+10. package.json: removed `prisma` + `@prisma/client`; scripts now just dev/build(next build)/lint; bun install lockfile sync (2 packages removed).
+11. next.config.ts: `output: "standalone"` → `output: "export"` + `images.unoptimized` — dev server still runs identically on :3000 (verified: Ready + GET / 200 with clean compile).
+12. Deploy files: NEW `netlify.toml` (build `npm run build`, publish `out`, NODE_VERSION 20, sw.js must-revalidate + hashed-asset immutable headers); NEW root `README.md` (modes table, your-data note, dev + Netlify deploy instructions, tech + layout).
+13. public/sw.js: CACHE bump v2→v3 (fresh shell for returning visitors), removed the /api network-only branch + updated header comments (fully static now).
+14. Comment polish: all stale "GET /api/sessions/stats"-style references in tables/types, use-daily-goal, focus-panel, daily-strip, activity-heatmap, practice/types now point at their local homes; SPEC.md rewritten — v2 architecture note at top, Task 3-a Prisma section replaced by the session-store contract, Task 3-b/3-c flows updated to local calls.
+15. Fixed a pre-existing QA-script bug found by the sweep: verify-engine.ts sanity assertion expected `verbCount * 5` (pre-vosotros) → now `verbCount * SUBJECT_KEYS.length` (312 = 52×6).
+16. VERIFIED (agent-browser, fresh session after full server restart + `.next` wipe):
+    - lint clean; tsc clean (src/); engine PASS 15955/15955; vosotros 70/70 + 312-combo sweep.
+    - Tables: fill 4 cells → check → "4 / 4 filled cells correct" + 4 green inputs; wrong answer → "4 / 5" + red verdict; reveal instant (hablo/he hablado/hable present; vosotros subject → habláis/habéis hablado/hablaríais/"you all speak"); no server round-trips.
+    - Practice: 1-min timed session end-to-end — correct answers auto-advance, wrong waits for Enter (r8 fix holds), end → confirm → results (67% · 2/3 · streak 2 · 7.1s/q) with miss review; session in `tdv-sessions` (score 2/3, 1 miss); records strip + racha + heatmap + focus (hardest verb "adquirir") all render from localStorage.
+    - Freeze flow (seeded day-2/day-3 sessions): offer "2-day racha can still be saved" → claim → PROTEGIDA chip + "2 días seguidos" + offer gone + freeze row in `tdv-freezes` (frozenFor = yesterday).
+    - Data manager: exportar (download), importar via file upload → "2 entries imported" toast + records/racha/heatmap/mis-drill fully repopulated live (tdv-data-changed), invalid file → clean error toast, borrar todo → confirm dialog → both keys REMOVED + toast.
+    - Cards: deck/counter/subjects (6 incl. vosotros)/direction/shuffle intact; dark mode both themes; mobile 390px × all 3 modes = 0 overflow offenders; final fresh reload = 46 inputs, default hablar, ZERO console errors; dev.log all 200s.
+    - Test data cleaned (all tdv-* keys removed, fresh default state restored), browser session closed.
+
+## Stage Summary
+- The app is now a pure static client SPA: `git init && git push` → Netlify (netlify.toml included) or any static host; `next build` emits `out/`. No server, no API routes, no database, no env vars.
+- Every former server feature survives 1:1 on localStorage: sessions/stats/focus analytics, streak-freeze insurance with rate-limit, records, heatmap, mastery, settings. Plus NEW: full data export/import/wipe in the help dialog ("tus datos · 100% local").
+- QA artifacts: /home/z/my-project/qa/s1-*.png (11 files).
+
+## Unresolved issues / risks / next-round priorities
+- `bun run build` (static export) was NOT executed in the sandbox (dev-only policy) — deployability verified structurally (no API routes, no dynamic APIs, output:export accepted by dev). First Netlify build should be watched once; next-intl/next-auth/z-ai-sdk remain in package.json unused (harmless, could be pruned for a leaner repo).
+- localStorage cap is 600 sessions (~24 weeks at 1/day, less with heavy misses) — oldest history sheds first on quota pressure (by design, documented in session-store header).
+- Cross-tab sync: two open tabs won't live-sync tdv-sessions (only the help-dialog import/wipe broadcasts tdv-data-changed) — a BroadcastChannel listener would fix it (candidate feature).
+- The `QuestionFetch.offline` field is now vestigial (always false) — harmless, kept for the banner contract.
+- Next-round candidates: (1) BroadcastChannel cross-tab sync; (2) "study this verb in cards" cross-mode handoff (r9 leftover); (3) spaced-repetition-lite card ordering from self-grades (r9 leftover); (4) prune unused deps (next-auth, next-intl, z-ai-sdk, @mdxeditor, react-syntax-highlighter…) for a leaner git repo; (5) add a tiny GitHub Actions workflow that runs `next build` on push to prove exportability in CI.

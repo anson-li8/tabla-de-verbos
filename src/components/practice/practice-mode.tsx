@@ -12,20 +12,18 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import { QuizScreen } from "./quiz-screen";
 import { ResultsScreen } from "./results-screen";
-import { SetupScreen } from "./setup-screen";
 import {
-  flushQueue,
-  enqueueSession,
-  queuedSessionCount,
-} from "./session-queue";
+  claimStreakFreeze,
+  fetchFocusStats,
+  fetchSessions,
+  saveSession,
+} from "./session-store";
+import { SetupScreen } from "./setup-screen";
 import {
   DEFAULT_SETTINGS,
   buildDrillSettings,
-  fetchFocusStats,
   fetchQuestionDetailed,
-  fetchSessions,
   sanitizeSettings,
-  saveSession,
   PRACTICE_TENSES,
   type FocusStatsResponse,
   type MissRecord,
@@ -64,8 +62,9 @@ export default function PracticeMode({
   const [settings, setSettings] = useState<QuizSettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  // records / recent sessions (GET /api/sessions) + focus
-  // analytics (GET /api/sessions/stats) — refreshed together
+  // records / recent sessions + focus analytics — both computed
+  // locally from localStorage (see ./session-store), refreshed
+  // together after every save
   const [sessions, setSessions] = useState<SessionsResponse | null>(null);
   const [focusStats, setFocusStats] = useState<FocusStatsResponse | null>(null);
   const [sessionsLoading, setSessionsLoading] = useState(true);
@@ -76,9 +75,6 @@ export default function PracticeMode({
   // session lifecycle
   const [sessionKey, setSessionKey] = useState(0);
   const [initialQuestion, setInitialQuestion] = useState<Question | null>(null);
-  /** true when the session's first question came from the local
-   *  (offline) generator rather than the API */
-  const [initialOffline, setInitialOffline] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState(false);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
@@ -92,11 +88,6 @@ export default function PracticeMode({
   const [drillLabel, setDrillLabel] = useState<string | null>(null);
   /** short label for the results mode line ("miss drill" / "verb drill") */
   const [drillShort, setDrillShort] = useState<string | null>(null);
-
-  /** sessions parked because the save failed (offline) — waiting to sync */
-  const [queuedSessions, setQueuedSessions] = useState(0);
-  /** "N queued sessions just synced" — flashes on the setup screen */
-  const [syncedNotice, setSyncedNotice] = useState(0);
 
   const clearDrill = useCallback(() => {
     setDrill(null);
@@ -147,31 +138,13 @@ export default function PracticeMode({
     void refreshSessions();
   }, [refreshSessions]);
 
-  // ── offline session queue: flush parked sessions when online ──
-  const tryFlushQueue = useCallback(
-    async (announce = false) => {
-      const { synced, remaining } = await flushQueue(saveSession);
-      setQueuedSessions(remaining);
-      if (synced > 0) {
-        await refreshSessions();
-        if (announce) {
-          setSyncedNotice(synced);
-          const t = setTimeout(() => setSyncedNotice(0), 5000);
-          void t;
-        }
-      }
-    },
-    [refreshSessions]
-  );
-
-  // flush on mount + whenever the connection comes back
+  // local-history changes (help-dialog import / wipe) — refresh
+  // the records + focus analytics live, no reload needed
   useEffect(() => {
-    setQueuedSessions(queuedSessionCount());
-    void tryFlushQueue(true);
-    const onOnline = () => void tryFlushQueue(true);
-    window.addEventListener("online", onOnline);
-    return () => window.removeEventListener("online", onOnline);
-  }, [tryFlushQueue]);
+    const onDataChanged = () => void refreshSessions();
+    window.addEventListener("tdv-data-changed", onDataChanged);
+    return () => window.removeEventListener("tdv-data-changed", onDataChanged);
+  }, [refreshSessions]);
 
   const handleSettingsChange = (next: QuizSettings) => {
     setSettings(next);
@@ -190,9 +163,8 @@ export default function PracticeMode({
       if (clearDrillBefore) clearDrill();
       const active = override ?? drill ?? settings;
       try {
-        const { question, offline } = await fetchQuestionDetailed(active);
+        const { question } = await fetchQuestionDetailed(active);
         setInitialQuestion(question);
-        setInitialOffline(offline);
         setSessionKey((k) => k + 1);
         setScreen("quiz");
       } catch {
@@ -279,8 +251,8 @@ export default function PracticeMode({
       try {
         await saveSession(s);
       } catch {
-        // offline (or server down) — park the session so it syncs later
-        setQueuedSessions(enqueueSession(s));
+        // storage unavailable (private mode / quota) — the session
+        // simply isn't persisted; the results screen still shows
       }
       setSummary(s);
       setScreen("results");
@@ -295,18 +267,18 @@ export default function PracticeMode({
     setScreen("setup");
   }, []);
 
-  // claim the streak freeze (seguro de racha) — POST, then
-  // refresh so the racha strip reflects the restored streak
-  const handleClaimFreeze = useCallback(async () => {
-    try {
-      const res = await fetch("/api/streak-freeze", { method: "POST" });
-      if (!res.ok) return false;
+  // claim the streak freeze (seguro de racha) — validated and
+  // stored locally, then refresh so the racha strip reflects the
+  // restored streak
+  const handleClaimFreeze = useCallback(
+    async (): Promise<{ ok: boolean; error?: string }> => {
+      const res = await claimStreakFreeze();
+      if (!res.ok) return res;
       await refreshSessions();
-      return true;
-    } catch {
-      return false;
-    }
-  }, [refreshSessions]);
+      return res;
+    },
+    [refreshSessions]
+  );
 
   return (
     <div className="w-full">
@@ -322,9 +294,6 @@ export default function PracticeMode({
               sessions={sessions}
               sessionsLoading={sessionsLoading}
               focusStats={focusStats}
-              queuedSessions={queuedSessions}
-              syncedNotice={syncedNotice}
-              onRetrySync={() => void tryFlushQueue(true)}
               onClaimFreeze={handleClaimFreeze}
               onDrillMisses={() =>
                 handleDrillMisses(focusStats?.recentMisses ?? [])
@@ -340,7 +309,6 @@ export default function PracticeMode({
             <QuizScreen
               key={sessionKey}
               initialQuestion={initialQuestion}
-              initialOffline={initialOffline}
               settings={drill ?? settings}
               drillLabel={drillLabel}
               onEnd={(s) => void handleQuizEnd(s)}

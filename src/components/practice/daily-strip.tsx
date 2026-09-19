@@ -6,7 +6,7 @@
 // toward the daily question goal on the right. The goal is
 // user-configurable via the "meta" popover (persisted by the
 // caller through useDailyGoal). Fed by the `daily` block of
-// GET /api/sessions/stats.
+// fetchFocusStats (session-store — all local data).
 // ─────────────────────────────────────────────────────────────
 
 import { useState } from "react";
@@ -25,13 +25,14 @@ import { DAILY_GOAL_OPTIONS, type DailyStats } from "./types";
 
 interface DailyStripProps {
   daily: DailyStats;
-  /** effective goal (user pick, else the server constant) */
+  /** effective goal (user pick, else the default constant) */
   goal: number;
   /** the user's explicit pick, if any — highlights the preset */
   userGoal: number | null;
   onGoalChange: (goal: number) => void;
-  /** claim the streak freeze (seguro de racha) — resolves true on success */
-  onClaimFreeze: () => Promise<boolean>;
+  /** claim the streak freeze (seguro de racha) — resolves
+   *  { ok, error? } (validated + stored locally) */
+  onClaimFreeze: () => Promise<{ ok: boolean; error?: string }>;
 }
 
 export function DailyStrip({
@@ -43,15 +44,19 @@ export function DailyStrip({
 }: DailyStripProps) {
   const { todayQuestions, streakDays, activeToday } = daily;
   const [claiming, setClaiming] = useState(false);
-  const [claimError, setClaimError] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
 
   const handleClaim = async () => {
     if (claiming) return;
     setClaiming(true);
-    setClaimError(false);
-    const ok = await onClaimFreeze();
+    setClaimError(null);
+    const res = await onClaimFreeze();
     setClaiming(false);
-    if (!ok) setClaimError(true);
+    if (!res.ok) {
+      setClaimError(
+        res.error ?? "couldn't claim the freeze — try again in a moment"
+      );
+    }
   };
   const goalMet = todayQuestions >= goal;
   const pct = Math.min(100, Math.round((todayQuestions / goal) * 100));
@@ -257,7 +262,7 @@ export function DailyStrip({
           </div>
           {claimError && (
             <p className="px-4 pb-3 font-mono text-[10px] uppercase tracking-[0.1em] text-destructive sm:px-5">
-              couldn't claim the freeze — try again in a moment
+              {claimError}
             </p>
           )}
         </motion.div>

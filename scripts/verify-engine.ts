@@ -319,7 +319,11 @@ for (const verb of ALL_VERBS) {
     }
   }
 }
-check("sanity sweep covered every verb × subject", sweptRows === verbCount * 5, `covered ${sweptRows}`);
+check(
+  "sanity sweep covered every verb × subject",
+  sweptRows === verbCount * SUBJECT_KEYS.length,
+  `covered ${sweptRows}, expected ${verbCount * SUBJECT_KEYS.length}`
+);
 
 // ── 5. Quiz generation ───────────────────────────────────────
 

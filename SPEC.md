@@ -1,6 +1,8 @@
 # SPEC — Tabla de Verbos (Modern Spanish Verb Trainer)
 
-Single-page app at `/` only. Two modes: **Tables** (classical verb chart practice/reference) and **Practice** (one-by-one quiz: conjugation or translation, timed or infinite).
+Single-page app at `/` only. Three modes: **Tables** (classical verb chart practice/reference), **Practice** (one-by-one quiz: conjugation or translation, timed or infinite) and **Cards** (flashcards).
+
+> **v2 architecture (current):** the app is a fully **static export** (`output: "export"` in next.config.ts → deployable `out/`, e.g. Netlify). **No server, no API routes, no database.** The conjugation engine / checker / quiz generator are pure TS shared by the client; grading (former `/api/check`, `/api/conjugate`) lives in `src/components/tables/chart-check.ts`, question generation calls `generateQuestion` directly, and ALL persistence (sessions, stats, streak freezes, data export/import/wipe) lives in `src/components/practice/session-store.ts` on `localStorage` (`tdv-sessions`, `tdv-freezes`). The former `Task 3-a` Prisma/API layer is GONE — its contracts are preserved 1:1 by session-store.
 
 ## File ownership (do not touch other agents' files)
 - `src/app/globals.css`, `src/app/layout.tsx`, `src/components/theme-provider.tsx` — owned by orchestrator (DONE, do not edit).
@@ -9,7 +11,7 @@ Single-page app at `/` only. Two modes: **Tables** (classical verb chart practic
 - `src/app/page.tsx`, `src/components/app/**`, `src/components/tables/**` — Task 3-b agent only.
 - `src/components/practice/**` — Task 3-c agent only.
 - NEVER use blue/indigo colors. Use tokens: `primary` (brick red), `accent` (saffron), `success`, `warn`, `muted`, etc. Fonts: `font-display` (Fraunces), default sans (Inter), `font-mono` (IBM Plex Mono). Use existing shadcn/ui components in `src/components/ui`.
-- `prisma/schema.prisma`, `src/app/api/**` — Task 3-a agent only.
+- `src/components/practice/session-store.ts` (localStorage persistence — the former API layer) — see contract below.
 
 ## Core contracts (already in types.ts / data.ts)
 
@@ -69,40 +71,31 @@ export function generateQuestion(settings: QuizSettings): Question;
 ```
 Rules: pick kind/tense/verb/subject randomly from settings (avoid repeating exact same triple consecutively — caller can't know, so just random). Conjugation: prompt = verb, chips = [subject pronoun, tenseLabelEs], answers = row.spanish, displayAnswer = row.spanish[0]. Translation ES→EN: display "{pronoun} {spanish form}" (commands: "¡habla! (tú)"; base rows: just the form), accept English from ALL rows of same verb+subject whose spanish forms include the displayed form (handles hablamos = present/preterite ambiguity). Translation EN→ES: display row.english[0] (canonical, no "!"), accept spanish forms from ALL rows whose english includes that phrase. Only offer `vos_pos`/`vos_neg` etc. if selected in settings.tenses.
 
-## Task 3-a — Prisma + APIs
-Schema (replace User/Post models):
-```prisma
-model PracticeSession {
-  id String @id @default(cuid())
-  mode String  // "timed" | "infinite"
-  durationSec Int
-  score Int
-  total Int
-  accuracy Float     // 0..1
-  bestStreak Int
-  avgMsPerQuestion Int
-  accentWarnings Int @default(0)
-  misses String @default("[]")  // JSON array [{verb,subject,tense,kind,given,expected,userAnswer}]
-  createdAt DateTime @default(now())
-}
+## Persistence layer — session-store.ts (replaces the old Task 3-a APIs)
+All functions are async (drop-in for the former fetch calls) and run entirely on `localStorage`:
+```ts
+// key "tdv-sessions" — StoredSession[] (chronological, capped ~600, quota-shedding writes)
+interface StoredSession { id; mode: "timed"|"infinite"; durationSec; score; total; accuracy; bestStreak; avgMsPerQuestion; accentWarnings; misses: MissRecord[]; tally: Record<tense,{c,t,ms?}>; createdAt: ISO }
+// key "tdv-freezes" — { frozenFor: "YYYY-MM-DD", createdAt: ISO }[]
+export async function saveSession(summary: SessionSummary): Promise<SessionRecord>;      // former POST /api/sessions (same normalization/caps)
+export async function fetchSessions(limit=8): Promise<{ recent; stats }>;               // former GET  /api/sessions
+export async function fetchFocusStats(): Promise<FocusStatsResponse>;                   // former GET  /api/sessions/stats (trend, hardest verbs/tenses, slowestTense, bestHour, recentMisses, daily incl. racha/freezes/heatmap days)
+export async function claimStreakFreeze(): Promise<{ ok; error? }>;                     // former POST /api/streak-freeze (4 validations, same error strings, 1/week)
+export function exportPracticeData(): string;                                           // JSON backup blob { app: "tabla-de-verbos", version, sessions, freezes }
+export function importPracticeData(json): { ok; imported?; error? };                     // merges, dedupes by id/frozenFor
+export function clearPracticeData(): void;                                              // wipes both keys
+// import/clear dispatch window event "tdv-data-changed" — practice-mode listens + refreshes live
 ```
-Run `bun run db:push`. Routes (use `import { db } from "@/lib/db"`; zod validation; all dynamic):
-- `POST /api/conjugate` {verb, subject} → { verb, subject, rows: ConjugationRow[] }
-- `POST /api/check` {verb, subject, answers: Record<RowKey, {es?: string; en?: string}>} → { verdicts: Record<RowKey, {es?: {correct: boolean; accentOnly: boolean; expected: string}; en?: {correct: boolean; expected: string}}>, summary: {correctCells: number; totalCells: number} } (use checker; expected = answers.join(" / ") limited to 2-3 variants)
-- `POST /api/practice/question` {settings} → Question (from quiz.ts). Validate non-empty types/tenses; default durationSec.
-- `GET /api/verbs` → { verbs: [{infinitive, level: 5|6, gloss}] }
-- `GET /api/sessions?limit=8` → { recent: [...], stats: {totalSessions, bestAccuracy, bestScore, bestStreak, avgAccuracy, totalQuestions} }
-- `POST /api/sessions` → save + return saved row (validate numbers; clamp 0..1 accuracy; misses JSON string ≤ 200 items)
-Test every route with curl after engine lands.
+Tables-mode grading (former `/api/check` + `/api/conjugate`) is ported to `src/components/tables/chart-check.ts` (`checkChart`, `conjugateChart`, `buildRevealData` — pure, synchronous, same response shapes).
 
 ## Task 3-b — Page shell + Tables mode (src/app/page.tsx + src/components/app/* + src/components/tables/*)
 page.tsx ('use client'): sticky glassy header: logo mark (inline SVG: red rounded square w/ cream "«V»" or accent-tilde motif) + "Tabla de Verbos" in font-display italic + tagline "spanish verb mastery" (mono, uppercase, tracking-widest, muted). Segmented mode switcher (Tables | Practice) with framer-motion `layoutId` pill + icons (Table2, Zap). Theme toggle (Sun/Moon). Main: `min-h-[calc(100vh-...)]` flex-col, AnimatePresence mode transitions. Footer (mt-auto, thin, mono small): "53 verbs · 23 forms · 5 subjects" + "Enter = next · accents count". Sticky-footer layout: root div `min-h-screen flex flex-col`, footer `mt-auto`.
-TablesMode: control card (verb Combobox — searchable over 53 verbs w/ gloss + level badge; subject segmented control; level filter chips All/Spanish 5/Spanish 6; buttons: Check (primary), Clear, Reveal answers (toggle → switches chart to read-only reference showing all correct forms), Random (dice)). Chart card: grouped sections (Los básicos / Indicativo / Perfecto / Subjuntivo / Imperativo) with ruled-paper background (use `.bg-ruled`), rows = label (es + en gloss) + Spanish input + English input. After Check: green ring + ✓ for correct, red ring + expected answer underneath for wrong; toast summary (use sonner `toast`). Enter moves to next input. Persist state (verb/subject/answers) in localStorage `tdv-tables`. Check calls `POST /api/check`; Reveal calls `POST /api/conjugate`. Mobile: stacked layout. All interactive ≥44px touch targets. Import PracticeMode from "@/components/practice/practice-mode" (Task 3-c builds it — assume `export default function PracticeMode()`).
+TablesMode: control card (verb Combobox — searchable over 53 verbs w/ gloss + level badge; subject segmented control; level filter chips All/Spanish 5/Spanish 6; buttons: Check (primary), Clear, Reveal answers (toggle → switches chart to read-only reference showing all correct forms), Random (dice)). Chart card: grouped sections (Los básicos / Indicativo / Perfecto / Subjuntivo / Imperativo) with ruled-paper background (use `.bg-ruled`), rows = label (es + en gloss) + Spanish input + English input. After Check: green ring + ✓ for correct, red ring + expected answer underneath for wrong; toast summary (use sonner `toast`). Enter moves to next input. Persist state (verb/subject/answers) in localStorage `tdv-tables`. Check calls `checkChart` (tables/chart-check.ts); Reveal computes `buildRevealData` locally (instant, no spinner). Mobile: stacked layout. All interactive ≥44px touch targets. Import PracticeMode from "@/components/practice/practice-mode" (Task 3-c builds it — assume `export default function PracticeMode()`).
 
 ## Task 3-c — Practice mode (src/components/practice/*)
 `practice-mode.tsx` default-exports `<PracticeMode />`. Screens: **setup → quiz → results** (internal state machine).
-- Setup card: question-type toggle cards (Conjugation w/ Sigma/Conjugation icon, ES→EN, EN→ES), tense chips (multi-select, quick presets "Core", "All", "None" — Core = pres/pret/imp/fut/cond), verb level segmented (Sp 5 / Sp 6 / All + count), mode cards: Timed (chips 1/2/5/10 min) vs Infinite, big Start button (primary). Show personal bests + recent sessions from `GET /api/sessions` (skeletons while loading). Persist settings localStorage `tdv-practice`.
-- Quiz: header strip = score, streak (flame, animated pop on change), accuracy, and for timed: animated SVG countdown ring turning red <20% + "end" button; infinite: elapsed mm:ss. Question card (framer-motion, key=question.id, slide+fade): chips row (mono uppercase), promptMain in font-display large (5xl-7xl). Answer input: large centered autofocus; accent helper buttons (á é í ó ú ñ ü) insert at caret; Enter submits; Skip (counts wrong). Fetch next question via `POST /api/practice/question` (prefetch next while answering current for snappiness). Feedback: exact → green border flash + "¡Correcto!" auto-advance ~600ms; accent → amber "Almost — watch the accents: {displayAnswer}" (counts correct, tracked as accentWarning) auto-advance; wrong → red shake + "Answer: {display}" + Enter to continue. Timed ends automatically at 0; then `POST /api/sessions` (body per API spec; misses = last 50 wrong) → results.
+- Setup card: question-type toggle cards (Conjugation w/ Sigma/Conjugation icon, ES→EN, EN→ES), tense chips (multi-select, quick presets "Core", "All", "None" — Core = pres/pret/imp/fut/cond), verb level segmented (Sp 5 / Sp 6 / All + count), mode cards: Timed (chips 1/2/5/10 min) vs Infinite, big Start button (primary). Show personal bests + recent sessions from `fetchSessions()` (session-store; skeletons while loading). Persist settings localStorage `tdv-practice`.
+- Quiz: header strip = score, streak (flame, animated pop on change), accuracy, and for timed: animated SVG countdown ring turning red <20% + "end" button; infinite: elapsed mm:ss. Question card (framer-motion, key=question.id, slide+fade): chips row (mono uppercase), promptMain in font-display large (5xl-7xl). Answer input: large centered autofocus; accent helper buttons (á é í ó ú ñ ü) insert at caret; Enter submits; Skip (counts wrong). Next question comes from `fetchQuestionDetailed` (types.ts — local `generateQuestion`, prefetched while answering for snappiness). Feedback: exact → green border flash + "¡Correcto!" auto-advance ~600ms; accent → amber "Almost — watch the accents: {displayAnswer}" (counts correct, tracked as accentWarning) auto-advance; wrong → red shake + "Answer: {display}" + Enter to continue. Timed ends automatically at 0; then `saveSession(summary)` (session-store; body per the persistence contract; misses = last 50 wrong) → results.
 - Results: big accuracy ring, stat grid (score, best streak, avg time/question, accent warnings), mode/duration line, confetti (canvas-confetti, brand colors [#c2410c-ish red, #d9a441 saffron, #5c8a4e olive]) when accuracy ≥ 0.8 && total ≥ 5, missed-questions review list (max-h-96 overflow-y-auto custom scrollbar), buttons "Practice again" / "Change settings", recent sessions list.
 
 ## Design language (everyone)

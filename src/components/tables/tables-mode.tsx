@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, useAnimationControls } from "framer-motion";
 import { Check, Dices, Eraser, Eye, EyeOff, Loader2 } from "lucide-react";
 
@@ -24,6 +24,7 @@ import {
 } from "@/lib/conjugator/types";
 import { cn } from "@/lib/utils";
 
+import { buildRevealData, checkChart } from "./chart-check";
 import { ConjugationChart } from "./conjugation-chart";
 import { SubjectPicker } from "./subject-picker";
 import { VerbOfDay } from "./verb-of-day";
@@ -35,8 +36,6 @@ import {
 import type {
   AnswersMap,
   CellLang,
-  CheckApiResponse,
-  ConjugateApiResponse,
   LevelFilter,
   RevealData,
   VerdictsMap,
@@ -76,11 +75,15 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
   const [answers, setAnswers] = useState<AnswersMap>({});
   const [verdicts, setVerdicts] = useState<VerdictsMap>({});
   const [revealMode, setRevealMode] = useState(false);
-  const [revealData, setRevealData] = useState<RevealData | null>(null);
-  const [revealKey, setRevealKey] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
-  const [revealing, setRevealing] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+
+  // ── reveal mode: the reference chart, computed locally (the
+  //    conjugation engine is pure shared code — no server)
+  const revealData = useMemo<RevealData | null>(
+    () => (revealMode ? buildRevealData(verb, subject) : null),
+    [revealMode, verb, subject]
+  );
 
   const checkPulse = useAnimationControls();
 
@@ -162,17 +165,12 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
   }, [hydrated, verb, subject, level, answers]);
 
   // ── check answers ───────────────────────────────────────────
-  const handleCheck = useCallback(async () => {
+  const handleCheck = useCallback(() => {
     if (checking || revealMode) return;
     setChecking(true);
     try {
-      const res = await fetch("/api/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ verb, subject, answers }),
-      });
-      if (!res.ok) throw new Error(`Request failed with ${res.status}`);
-      const data = (await res.json()) as CheckApiResponse;
+      // graded locally — the checker is pure, shared code
+      const data = checkChart(verb, subject, answers);
       setVerdicts(data.verdicts ?? {});
       // fold the fresh verdicts into the mastery map
       recordVerdicts(
@@ -230,57 +228,13 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
     } catch {
       toast({
         variant: "destructive",
-        title: "Couldn't reach the server",
-        description: "Your answers are safe — try checking again in a moment.",
+        title: "Something went wrong",
+        description: "Your answers are safe — try checking again.",
       });
     } finally {
       setChecking(false);
     }
   }, [checking, revealMode, verb, subject, answers, toast, checkPulse, recordVerdicts]);
-
-  // ── reveal mode: fetch the reference chart ─────────────────
-  useEffect(() => {
-    if (!revealMode) return;
-    let cancelled = false;
-    setRevealing(true);
-    const load = async () => {
-      try {
-        const res = await fetch("/api/conjugate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ verb, subject }),
-        });
-        if (!res.ok) throw new Error(`Request failed with ${res.status}`);
-        const data = (await res.json()) as ConjugateApiResponse;
-        if (cancelled) return;
-        const map: RevealData = {};
-        for (const row of data.rows ?? []) {
-          map[row.key] = {
-            spanish: Array.isArray(row.spanish) ? row.spanish : [],
-            english: Array.isArray(row.english) ? row.english : [],
-          };
-        }
-        setRevealData(map);
-        setRevealKey(`${verb}:${subject}`);
-      } catch {
-        if (!cancelled) {
-          toast({
-            variant: "destructive",
-            title: "Couldn't reach the server",
-            description:
-              "Couldn't load the reference chart — try again in a moment.",
-          });
-          setRevealMode(false);
-        }
-      } finally {
-        if (!cancelled) setRevealing(false);
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [revealMode, verb, subject, toast]);
 
   // ── answer edits ────────────────────────────────────────────
   const handleAnswerChange = useCallback(
@@ -367,10 +321,6 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
   const handleRevealToggle = useCallback(() => {
     setRevealMode((prev) => !prev);
   }, []);
-
-  // reveal answers are only valid for the current verb+subject
-  const effectiveRevealData =
-    revealKey === `${verb}:${subject}` ? revealData : null;
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
@@ -471,7 +421,6 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
             <Button
               variant="outline"
               onClick={handleRevealToggle}
-              disabled={revealing}
               aria-pressed={revealMode}
               className={cn(
                 "h-11 rounded-xl px-4 font-mono text-xs uppercase tracking-[0.14em]",
@@ -479,9 +428,7 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
                   "border-accent-foreground/30 bg-accent text-accent-foreground hover:bg-accent/80"
               )}
             >
-              {revealing ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              ) : revealMode ? (
+              {revealMode ? (
                 <EyeOff className="size-4" aria-hidden="true" />
               ) : (
                 <Eye className="size-4" aria-hidden="true" />
@@ -518,7 +465,7 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
         answers={answers}
         verdicts={verdicts}
         revealMode={revealMode}
-        revealData={effectiveRevealData}
+        revealData={revealData}
         masteredRows={masteredRows}
         masteredCount={masteredCount}
         onAnswerChange={handleAnswerChange}

@@ -1,22 +1,21 @@
 // ─────────────────────────────────────────────────────────────
 // Tabla de Verbos service worker — offline app shell.
 //
+// The app is fully static (no API routes, no database — every
+// request is an asset), so the cache covers the entire app.
+//
 // Strategy:
 //   navigation (/)      network-first → cached shell → offline page
 //   immutable assets    cache-first (hashed media, icons, svg)
 //   other static        network-first → cache fallback — dev-safe:
-//                       Turbopack's dev CSS/JS chunks keep a stable
-//                       (non-hashed) URL, so cache-first would serve
-//                       stale styles forever; network-first still
-//                       works offline via the fallback
-//   /api/*              network-only (practice falls back to
-//                       client-side question generation; session
-//                       saves surface a clear error, never a
-//                       broken page)
+//                       dev CSS/JS chunks keep a stable (non-hashed)
+//                       URL, so cache-first would serve stale styles
+//                       forever; network-first still works offline
+//                       via the fallback
 // Bump CACHE on shell changes — old caches purge on activate.
 // ─────────────────────────────────────────────────────────────
 
-const CACHE = "tdv-shell-v2";
+const CACHE = "tdv-shell-v3";
 
 /** truly immutable, safe to serve without revalidation */
 const IMMUTABLE = [
@@ -56,10 +55,9 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  if (request.method !== "GET") return; // API POSTs stay online
+  if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith("/api/")) return; // network-only
   if (url.pathname === "/sw.js") return; // never intercept the SW itself
 
   // app shell navigations — network-first with cached fallback
