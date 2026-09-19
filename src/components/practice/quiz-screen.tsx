@@ -62,6 +62,7 @@ import {
   type QuestionKind,
   type QuizSettings,
   type SessionSummary,
+  type TenseTally,
 } from "./types";
 
 type Phase = "asking" | "right" | "accent" | "wrong";
@@ -69,6 +70,8 @@ type Phase = "asking" | "right" | "accent" | "wrong";
 interface QuizScreenProps {
   initialQuestion: Question;
   settings: QuizSettings;
+  /** chip label for focused drills ("miss drill · 3 verbs") — null for normal sessions */
+  drillLabel?: string | null;
   onEnd: (summary: SessionSummary) => void;
   onEmptyEnd: () => void;
 }
@@ -76,6 +79,7 @@ interface QuizScreenProps {
 export function QuizScreen({
   initialQuestion,
   settings,
+  drillLabel,
   onEnd,
   onEmptyEnd,
 }: QuizScreenProps) {
@@ -106,6 +110,9 @@ export function QuizScreen({
   const [accentWarnings, setAccentWarnings] = useState(0);
   const [misses, setMisses] = useState<MissRecord[]>([]);
   const totalElapsedRef = useRef(0);
+  // per-tense answer counts — kept in a ref (rendered nowhere,
+  // only folded into the final summary)
+  const tallyRef = useRef<TenseTally>({});
 
   // ── question flow (current + prefetched next) ──────────────
   const [question, setQuestion] = useState<Question | null>(initialQuestion);
@@ -177,6 +184,7 @@ export function QuizScreen({
       avgMsPerQuestion: Math.round(totalElapsedRef.current / total),
       accentWarnings,
       misses: misses.slice(-50),
+      tally: tallyRef.current,
     });
   };
 
@@ -225,6 +233,19 @@ export function QuizScreen({
     ]);
   };
 
+  /** count one answer toward its tense (correct or not) */
+  const tallyAnswer = (correct: boolean) => {
+    if (!question) return;
+    const prev = tallyRef.current[question.tense] ?? { c: 0, t: 0 };
+    tallyRef.current = {
+      ...tallyRef.current,
+      [question.tense]: {
+        c: prev.c + (correct ? 1 : 0),
+        t: prev.t + 1,
+      },
+    };
+  };
+
   const submit = () => {
     if (!question || phase !== "asking") return;
     const value = input.trim();
@@ -241,6 +262,7 @@ export function QuizScreen({
       const nextStreak = streak + 1;
       setStreak(nextStreak);
       setBestStreak((b) => Math.max(b, nextStreak));
+      tallyAnswer(true);
       setPhase("right");
       scheduleAdvance(550);
     } else if (result === "accent") {
@@ -250,10 +272,12 @@ export function QuizScreen({
       setStreak(nextStreak);
       setBestStreak((b) => Math.max(b, nextStreak));
       setAccentWarnings((w) => w + 1);
+      tallyAnswer(true);
       setPhase("accent");
       scheduleAdvance(900);
     } else {
       setStreak(0);
+      tallyAnswer(false);
       setPhase("wrong");
       recordMiss(value);
       shake();
@@ -265,6 +289,7 @@ export function QuizScreen({
     totalElapsedRef.current += Date.now() - questionStartRef.current;
     setTotal((t) => t + 1);
     setStreak(0);
+    tallyAnswer(false);
     setPhase("wrong");
     recordMiss("");
   };
@@ -495,9 +520,9 @@ export function QuizScreen({
               <Card className="gap-0 rounded-2xl p-5 shadow-sm sm:p-8">
                 {/* chips + kind icon */}
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  {settings.verbs && settings.verbs.length > 0 && (
+                  {drillLabel && (
                     <span className="rounded-full border border-accent bg-accent px-3 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-accent-foreground sm:text-xs">
-                      miss drill · {settings.verbs.length} verbs
+                      {drillLabel}
                     </span>
                   )}
                   <KindIcon kind={question.kind} />

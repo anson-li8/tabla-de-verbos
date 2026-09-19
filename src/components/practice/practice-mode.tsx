@@ -21,6 +21,7 @@ import {
   fetchSessions,
   sanitizeSettings,
   saveSession,
+  PRACTICE_TENSES,
   type FocusStatsResponse,
   type MissRecord,
   type Question,
@@ -28,6 +29,7 @@ import {
   type SessionSummary,
   type SessionsResponse,
 } from "./types";
+import { ALL_VERBS, ROW_META, type RowKey } from "@/lib/conjugator/types";
 
 type Screen = "setup" | "quiz" | "results";
 
@@ -40,7 +42,17 @@ const screenMotion = {
   transition: { duration: 0.25, ease: "easeOut" as const },
 };
 
-export default function PracticeMode() {
+interface PracticeModeProps {
+  /** verb handed over from Tables mode ("quiz me on this verb") — consumed once */
+  quizVerb?: string | null;
+  /** page-level callback: the handed-over verb has been picked up */
+  onQuizVerbConsumed?: () => void;
+}
+
+export default function PracticeMode({
+  quizVerb,
+  onQuizVerbConsumed,
+}: PracticeModeProps) {
   const [screen, setScreen] = useState<Screen>("setup");
 
   // settings (hydrated from localStorage, persisted on change)
@@ -60,8 +72,18 @@ export default function PracticeMode() {
   const [startError, setStartError] = useState(false);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
 
-  /** focused settings while a "drill my misses" session is active */
+  /** focused settings while a drill session is active */
   const [drill, setDrill] = useState<QuizSettings | null>(null);
+  /** chip label shown on every quiz question ("miss drill · 3 verbs") */
+  const [drillLabel, setDrillLabel] = useState<string | null>(null);
+  /** short label for the results mode line ("miss drill" / "verb drill") */
+  const [drillShort, setDrillShort] = useState<string | null>(null);
+
+  const clearDrill = useCallback(() => {
+    setDrill(null);
+    setDrillLabel(null);
+    setDrillShort(null);
+  }, []);
 
   // hydrate persisted settings
   useEffect(() => {
@@ -107,19 +129,19 @@ export default function PracticeMode() {
 
   const handleSettingsChange = (next: QuizSettings) => {
     setSettings(next);
-    setDrill(null);
+    clearDrill();
     setStartError(false);
   };
 
-  // fetch the first question (Start / practice again / miss drill) — the
+  // fetch the first question (Start / practice again / drills) — the
   // quiz prefetches everything after it. `override` replaces the settings
   // for this session; `clearDrill` drops a previously active drill.
   const startSession = useCallback(
-    async (override?: QuizSettings, clearDrill = false) => {
+    async (override?: QuizSettings, clearDrillBefore = false) => {
       if (starting) return;
       setStarting(true);
       setStartError(false);
-      if (clearDrill) setDrill(null);
+      if (clearDrillBefore) clearDrill();
       const active = override ?? drill ?? settings;
       try {
         const q = await fetchQuestion(active);
@@ -132,7 +154,7 @@ export default function PracticeMode() {
         setStarting(false);
       }
     },
-    [settings, drill, starting]
+    [settings, drill, starting, clearDrill]
   );
 
   // "drill these misses" — focused infinite session on the missed verbs
@@ -140,11 +162,59 @@ export default function PracticeMode() {
     (misses: MissRecord[]) => {
       const drillSettings = buildDrillSettings(misses, settings);
       if (!drillSettings) return;
+      const verbs = drillSettings.verbs ?? [];
       setDrill(drillSettings);
+      setDrillLabel(`miss drill · ${verbs.length} verb${verbs.length === 1 ? "" : "s"}`);
+      setDrillShort("miss drill");
       void startSession(drillSettings);
     },
     [settings, startSession]
   );
+
+  // "quiz me on this verb" — focused infinite session on a single verb
+  const startVerbDrill = useCallback(
+    (verb: string) => {
+      if (!ALL_VERBS.includes(verb)) return;
+      const drillSettings: QuizSettings = {
+        ...settings,
+        verbs: [verb],
+        mode: "infinite",
+      };
+      setDrill(drillSettings);
+      setDrillLabel(`verb drill · ${verb}`);
+      setDrillShort("verb drill");
+      void startSession(drillSettings);
+    },
+    [settings, startSession]
+  );
+
+  // "drill this tense" — focused infinite session on a single tense
+  const startTenseDrill = useCallback(
+    (tense: string) => {
+      if (!(PRACTICE_TENSES as string[]).includes(tense)) return;
+      const drillSettings: QuizSettings = {
+        ...settings,
+        verbs: undefined,
+        tenses: [tense as RowKey],
+        mode: "infinite",
+      };
+      setDrill(drillSettings);
+      setDrillLabel(
+        `tense drill · ${ROW_META[tense as RowKey]?.labelEs ?? tense}`
+      );
+      setDrillShort("tense drill");
+      void startSession(drillSettings);
+    },
+    [settings, startSession]
+  );
+
+  // a verb handed over from Tables mode (verb-of-the-day "quiz me")
+  // starts a verb drill automatically — consumed exactly once
+  useEffect(() => {
+    if (!quizVerb) return;
+    onQuizVerbConsumed?.();
+    startVerbDrill(quizVerb);
+  }, [quizVerb]);
 
   // quiz finished with at least one answered question:
   // save the session, then show the results
@@ -185,6 +255,8 @@ export default function PracticeMode() {
               onDrillMisses={() =>
                 handleDrillMisses(focusStats?.recentMisses ?? [])
               }
+              onVerbDrill={startVerbDrill}
+              onTenseDrill={startTenseDrill}
             />
           </motion.div>
         )}
@@ -195,6 +267,7 @@ export default function PracticeMode() {
               key={sessionKey}
               initialQuestion={initialQuestion}
               settings={drill ?? settings}
+              drillLabel={drillLabel}
               onEnd={(s) => void handleQuizEnd(s)}
               onEmptyEnd={handleEmptyEnd}
             />
@@ -207,9 +280,10 @@ export default function PracticeMode() {
               summary={summary}
               sessions={sessions}
               sessionsLoading={sessionsLoading}
-              wasDrill={!!drill}
+              drillShort={drillShort}
               onPracticeAgain={() => void startSession()}
               onDrillMisses={handleDrillMisses}
+              onVerbDrill={startVerbDrill}
               onChangeSettings={() => setScreen("setup")}
               againLoading={starting}
             />

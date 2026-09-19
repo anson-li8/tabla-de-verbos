@@ -16,6 +16,14 @@ import {
 
 export default function Home() {
   const [mode, setMode] = useState<AppMode>("tables");
+  // a verb handed from Tables mode ("quiz me") to Practice mode —
+  // consumed once by PracticeMode on mount/prop change
+  const [quizVerb, setQuizVerb] = useState<string | null>(null);
+
+  const handleQuizVerb = (verb: string) => {
+    setQuizVerb(verb);
+    setMode("practice");
+  };
 
   // keyboard shortcuts: 1 / 2 (or T / P) jump between modes — ignored while
   // typing in an input, using modifiers, or when a dialog is open
@@ -74,7 +82,14 @@ export default function Home() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
           >
-            {mode === "tables" ? <TablesMode /> : <PracticeMode />}
+            {mode === "tables" ? (
+              <TablesMode onQuizVerb={handleQuizVerb} />
+            ) : (
+              <PracticeMode
+                quizVerb={quizVerb}
+                onQuizVerbConsumed={() => setQuizVerb(null)}
+              />
+            )}
           </motion.div>
         </AnimatePresence>
       </main>

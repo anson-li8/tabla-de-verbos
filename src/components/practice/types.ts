@@ -51,6 +51,15 @@ export interface MissRecord {
   userAnswer: string;
 }
 
+/** per-tense answer counts — c = correct, t = total */
+export interface TallyEntry {
+  c: number;
+  t: number;
+}
+
+/** tense key → { c, t } (sparse — only tenses actually answered) */
+export type TenseTally = Record<string, TallyEntry>;
+
 export interface SessionSummary {
   mode: SessionMode;
   durationSec: number;
@@ -61,6 +70,8 @@ export interface SessionSummary {
   avgMsPerQuestion: number;
   accentWarnings: number;
   misses: MissRecord[];
+  /** per-tense answer counts for the breakdown on the results screen */
+  tally: TenseTally;
 }
 
 export interface SessionRecord {
@@ -108,6 +119,22 @@ export interface HardestVerb {
   lastMissedAt: string;
 }
 
+/** a tense with the weakest accuracy (≥ 5 answers), ranked weakest-first */
+export interface HardestTense {
+  tense: string;
+  c: number;
+  t: number;
+}
+
+/** daily-goal aggregates for the racha strip */
+export interface DailyStats {
+  goal: number;
+  todayQuestions: number;
+  streakDays: number;
+  bestStreakDays: number;
+  activeToday: boolean;
+}
+
 export interface FocusStatsResponse {
   /** last 14 sessions, oldest → newest */
   trend: FocusTrendPoint[];
@@ -115,8 +142,12 @@ export interface FocusStatsResponse {
   trendDelta: number | null;
   /** top verbs by miss count */
   hardestVerbs: HardestVerb[];
+  /** weakest tenses by accuracy (from the per-session tallies) */
+  hardestTenses: HardestTense[];
   /** ≤ 30 most recent misses (chronological) — feeds the drill quick-start */
   recentMisses: MissRecord[];
+  /** daily goal + racha (day streak) */
+  daily: DailyStats;
   totals: { sessions: number; missCount: number };
 }
 
@@ -286,6 +317,18 @@ export function answerLang(kind: QuestionKind): "es" | "en" {
   return kind === "translate-es-en" ? "en" : "es";
 }
 
+// ── Tense tally helpers ────────────────────────────────────
+
+/** accuracy for one tally entry (0 when nothing was answered) */
+export function tallyAccuracy(entry: TallyEntry): number {
+  return entry.t > 0 ? entry.c / entry.t : 0;
+}
+
+/** total questions across a tally (its entries' t summed) */
+export function tallyTotal(tally: TenseTally): number {
+  return Object.values(tally).reduce((a, e) => a + e.t, 0);
+}
+
 // ── API fetchers (contracts owned by Task 3-a) ───────────────
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
@@ -344,7 +387,9 @@ export async function fetchFocusStats(): Promise<FocusStatsResponse> {
     !data ||
     !Array.isArray(data.trend) ||
     !Array.isArray(data.hardestVerbs) ||
+    !Array.isArray(data.hardestTenses) ||
     !Array.isArray(data.recentMisses) ||
+    !data.daily ||
     !data.totals
   ) {
     throw new Error("malformed focus stats response");

@@ -8,7 +8,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { motion } from "framer-motion";
-import { ArrowRight, Check, Sunrise } from "lucide-react";
+import { ArrowRight, Check, Sunrise, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -47,9 +47,11 @@ interface VerbOfDayProps {
   current: string;
   /** load a verb into the chart (clears answers) */
   onPick: (verb: string) => void;
+  /** hand the verb to Practice mode for a focused quiz */
+  onQuiz: (verb: string) => void;
 }
 
-export function VerbOfDay({ current, onPick }: VerbOfDayProps) {
+export function VerbOfDay({ current, onPick, onQuiz }: VerbOfDayProps) {
   const verb = todaysVerb();
   const gloss = verbGlosses(verb);
   const isCurrent = verb === current;
@@ -106,30 +108,43 @@ export function VerbOfDay({ current, onPick }: VerbOfDayProps) {
             ))}
           </dl>
 
-          <Button
-            variant={isCurrent ? "outline" : "default"}
-            size="sm"
-            onClick={() => onPick(verb)}
-            disabled={isCurrent}
-            aria-label={
-              isCurrent
-                ? `${verb} is already on the chart`
-                : `study ${verb} in the chart`
-            }
-            className="h-11 gap-1.5 rounded-xl px-4 font-mono text-[11px] uppercase tracking-[0.12em]"
-          >
-            {isCurrent ? (
-              <>
-                <Check className="size-4" aria-hidden="true" />
-                on the chart
-              </>
-            ) : (
-              <>
-                study this verb
-                <ArrowRight className="size-4" aria-hidden="true" />
-              </>
-            )}
-          </Button>
+          <div className="flex items-center gap-2.5">
+            <Button
+              variant={isCurrent ? "outline" : "default"}
+              size="sm"
+              onClick={() => onPick(verb)}
+              disabled={isCurrent}
+              aria-label={
+                isCurrent
+                  ? `${verb} is already on the chart`
+                  : `study ${verb} in the chart`
+              }
+              className="h-11 gap-1.5 rounded-xl px-4 font-mono text-[11px] uppercase tracking-[0.12em]"
+            >
+              {isCurrent ? (
+                <>
+                  <Check className="size-4" aria-hidden="true" />
+                  on the chart
+                </>
+              ) : (
+                <>
+                  study this verb
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onQuiz(verb)}
+              aria-label={`quiz me on ${verb}`}
+              title={`start a focused practice drill on ${verb}`}
+              className="h-11 gap-1.5 rounded-xl border-primary/30 bg-primary/[0.04] px-4 font-mono text-[11px] uppercase tracking-[0.12em] text-primary hover:bg-primary/[0.08] hover:text-primary"
+            >
+              <Zap className="size-4" aria-hidden="true" />
+              quiz me
+            </Button>
+          </div>
         </div>
       </div>
     </motion.aside>

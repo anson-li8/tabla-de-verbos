@@ -5,7 +5,7 @@
 // sessions, misses review list, actions and recent sessions.
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import { motion } from "framer-motion";
 import {
@@ -13,6 +13,7 @@ import {
   Loader2,
   Play,
   Settings2,
+  Share2,
   Sparkles,
   Target,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 import { ROW_META, SUBJECTS, type RowKey } from "@/lib/conjugator/types";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 import { AccuracyRing } from "./accuracy-ring";
@@ -29,9 +31,12 @@ import {
   MICRO,
   formatDuration,
   kindLabel,
+  tallyAccuracy,
+  tallyTotal,
   type MissRecord,
   type SessionSummary,
   type SessionsResponse,
+  type TallyEntry,
 } from "./types";
 
 const CONFETTI_COLORS = ["#b03d2c", "#d9a441", "#5c8a4e", "#e8d5b5"];
@@ -40,10 +45,12 @@ interface ResultsScreenProps {
   summary: SessionSummary;
   sessions: SessionsResponse | null;
   sessionsLoading: boolean;
-  /** true when this session was a focused miss-drill */
-  wasDrill: boolean;
+  /** short drill label for the mode line ("miss drill" / "verb drill") */
+  drillShort?: string | null;
   onPracticeAgain: () => void;
   onDrillMisses: (misses: MissRecord[]) => void;
+  /** start a focused drill on a single verb (miss-row verb buttons) */
+  onVerbDrill: (verb: string) => void;
   onChangeSettings: () => void;
   againLoading: boolean;
 }
@@ -52,12 +59,15 @@ export function ResultsScreen({
   summary,
   sessions,
   sessionsLoading,
-  wasDrill,
+  drillShort,
   onPracticeAgain,
   onDrillMisses,
+  onVerbDrill,
   onChangeSettings,
   againLoading,
 }: ResultsScreenProps) {
+  const { toast } = useToast();
+  const [shareState, setShareState] = useState<"idle" | "copied">("idle");
   // fire confetti once for strong sessions (≥ 80% with ≥ 5 questions)
   const celebratedRef = useRef(false);
   useEffect(() => {
@@ -96,9 +106,41 @@ export function ResultsScreen({
   }, [summary]);
 
   const modeLine = `${
-    wasDrill ? "miss drill" : summary.mode === "timed" ? "timed" : "infinite"
+    drillShort ?? (summary.mode === "timed" ? "timed" : "infinite")
   } · ${formatDuration(summary.durationSec)}`;
   const drillVerbCount = new Set(summary.misses.map((m) => m.verb)).size;
+
+  // sorted per-tense rows — weakest first, only tenses actually answered
+  const tallyRows = Object.entries(summary.tally ?? {})
+    .filter(([, e]) => e.t > 0)
+    .sort((a, b) => tallyAccuracy(a[1]) - tallyAccuracy(b[1]));
+  const showBreakdown = tallyRows.length > 0 && tallyTotal(summary.tally) >= 4;
+
+  // ── share the session summary (Web Share → clipboard fallback) ──
+  const handleShare = async () => {
+    const pct = Math.round(summary.accuracy * 100);
+    const text = [
+      "Tabla de Verbos — sesión de práctica",
+      `${summary.score}/${summary.total} correct · ${pct}% accuracy`,
+      `racha máxima ${summary.bestStreak} · ${modeLine}`,
+    ].join("\n");
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Tabla de Verbos", text });
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      setShareState("copied");
+      setTimeout(() => setShareState("idle"), 2200);
+      toast({
+        title: "Copied to clipboard",
+        description: "paste your results anywhere to share them",
+      });
+    } catch {
+      // user dismissed the share sheet or the clipboard was blocked —
+      // quiet failure is fine (this button is a nicety)
+    }
+  };
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-8">
@@ -158,6 +200,35 @@ export function ResultsScreen({
         </div>
       </motion.section>
 
+      {/* per-tense breakdown */}
+      {showBreakdown && (
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.08, ease: "easeOut" }}
+          aria-label="tense by tense breakdown"
+        >
+          <h3 className="mb-3 font-display text-2xl font-semibold">
+            tense by tense
+          </h3>
+          <Card className="space-y-4 rounded-2xl p-5 shadow-sm sm:p-6">
+            <div className="scrollbar-thin max-h-72 space-y-3.5 overflow-y-auto pr-1">
+              {tallyRows.map(([tense, entry], i) => (
+                <TallyBar
+                  key={tense}
+                  tense={tense}
+                  entry={entry}
+                  index={i}
+                />
+              ))}
+            </div>
+            <p className={cn(MICRO, "text-center")}>
+              weakest first — tap a verb below to drill it
+            </p>
+          </Card>
+        </motion.section>
+      )}
+
       {/* misses review */}
       <motion.section
         initial={{ opacity: 0, y: 16 }}
@@ -185,6 +256,7 @@ export function ResultsScreen({
                 <MissRow
                   key={`${miss.verb}-${miss.tense}-${i}`}
                   miss={miss}
+                  onVerbDrill={onVerbDrill}
                 />
               ))}
             </div>
@@ -199,6 +271,19 @@ export function ResultsScreen({
         transition={{ duration: 0.45, delay: 0.16, ease: "easeOut" }}
         className="flex flex-col gap-3 sm:flex-row"
       >
+        <Button
+          variant="outline"
+          onClick={() => void handleShare()}
+          aria-label="share these results"
+          className="h-14 gap-2.5 rounded-xl px-6 text-base"
+        >
+          {shareState === "copied" ? (
+            <Sparkles className="size-5 text-success" aria-hidden="true" />
+          ) : (
+            <Share2 className="size-5" aria-hidden="true" />
+          )}
+          {shareState === "copied" ? "copied" : "share"}
+        </Button>
         {summary.misses.length > 0 ? (
           <>
             <Button
@@ -272,7 +357,13 @@ export function ResultsScreen({
 const MISS_CHIP =
   "rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground";
 
-function MissRow({ miss }: { miss: MissRecord }) {
+function MissRow({
+  miss,
+  onVerbDrill,
+}: {
+  miss: MissRecord;
+  onVerbDrill: (verb: string) => void;
+}) {
   const tenseLabel = ROW_META[miss.tense as RowKey]?.labelEs ?? miss.tense;
   const pronoun = miss.subject
     ? SUBJECTS.find((s) => s.key === miss.subject)?.pronoun
@@ -281,9 +372,15 @@ function MissRow({ miss }: { miss: MissRecord }) {
   return (
     <div className="px-4 py-3.5 sm:px-5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="font-display text-lg font-semibold leading-none">
+        <button
+          type="button"
+          onClick={() => onVerbDrill(miss.verb)}
+          title={`drill ${miss.verb}`}
+          aria-label={`drill the verb ${miss.verb}`}
+          className="font-display text-lg font-semibold leading-none underline decoration-dotted decoration-1 underline-offset-4 transition-colors outline-none hover:text-primary focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
           {miss.verb}
-        </span>
+        </button>
         <span className="flex flex-wrap items-center gap-1.5">
           {pronoun && <span className={MISS_CHIP}>{pronoun}</span>}
           <span className={MISS_CHIP}>{tenseLabel}</span>
@@ -320,6 +417,68 @@ function MissLine({
     <div className="flex gap-3">
       <dt className={cn(MICRO, "w-14 shrink-0 pt-1 text-right")}>{label}</dt>
       <dd className={cn("min-w-0 break-words", valueClass)}>{value}</dd>
+    </div>
+  );
+}
+
+// ── Per-tense accuracy bar ─────────────────────────────
+
+function TallyBar({
+  tense,
+  entry,
+  index,
+}: {
+  tense: string;
+  entry: TallyEntry;
+  index: number;
+}) {
+  const label = ROW_META[tense as RowKey]?.labelEs ?? tense;
+  const acc = tallyAccuracy(entry);
+  const pct = Math.round(acc * 100);
+  const tone =
+    acc >= 0.8
+      ? "bg-success"
+      : acc >= 0.5
+        ? "bg-primary"
+        : "bg-destructive";
+  const textTone =
+    acc >= 0.8
+      ? "text-success"
+      : acc >= 0.5
+        ? "text-primary"
+        : "text-destructive";
+
+  return (
+    <div className="flex items-center gap-3 sm:gap-4">
+      <p
+        className="w-32 shrink-0 truncate font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground sm:w-36"
+        title={label}
+      >
+        {label}
+      </p>
+      <div
+        className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${label} — ${entry.c} of ${entry.t} correct`}
+      >
+        <motion.div
+          className={cn("h-full rounded-full", tone)}
+          initial={{ width: 0 }}
+          animate={{ width: `${Math.max(2, pct)}%` }}
+          transition={{
+            duration: 0.7,
+            delay: 0.15 + index * 0.07,
+            ease: "easeOut",
+          }}
+        />
+      </div>
+      <p className="w-20 shrink-0 text-right font-mono text-xs tabular-nums">
+        <span className={textTone}>{pct}%</span>
+        <span className="text-muted-foreground/70"> {entry.c}/{entry.t}</span>
+      </p>
     </div>
   );
 }

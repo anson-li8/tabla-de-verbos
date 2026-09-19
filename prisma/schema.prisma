@@ -16,6 +16,7 @@ datasource db {
 // One finished practice-quiz run (timed challenge or infinite mode).
 // `misses` stores a JSON array of missed questions:
 //   [{ verb, subject, tense, kind, given, expected, userAnswer }]
+// `tally` stores a JSON map of per-tense answers: tense → { c, t }
 model PracticeSession {
   id               String   @id @default(cuid())
   mode             String // "timed" | "infinite"
@@ -27,5 +28,6 @@ model PracticeSession {
   avgMsPerQuestion Int
   accentWarnings   Int      @default(0)
   misses           String   @default("[]") // JSON array
+  tally            String   @default("{}") // JSON map: tense → { c, t }
   createdAt        DateTime @default(now())
 }

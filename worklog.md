@@ -234,3 +234,41 @@ Task: Continuous improvement round 2 — status assessment, QA, miss-bank analyt
 - Next-round candidate features (priority order): (1) shareable/printable results card (canvas render of the session summary); (2) per-tense accuracy breakdown on results (needs per-question tense tally — could extend SessionSummary.misses or a new analytics field); (3) streak calendar/heatmap (needs daily aggregates from sessions table); (4) practice "daily goal" (e.g. 20 questions/day with progress); (5) verb-of-the-day could link into Practice ("quiz me on caer").
 - Minor polish backlog: focus sparkline could gain hover tooltips per point (currently static); toughest-verb chips could be clickable to drill that single verb; records→focus→builder vertical rhythm is good but focus card could get bg-dotted on wide screens for texture parity.
 - Utility scripts added for future QA rounds: scripts/check-db.ts (dump sessions w/ miss verbs), scripts/clean-sessions.ts (deleteMany) — safe to reuse.
+
+---
+Task ID: 9 (cron review round 3)
+Agent: cron-webDevReview
+Task: Continuous improvement round 3 — status assessment, QA, per-tense breakdown, daily goal/racha, cross-mode verb drills, interactive analytics chips, share results
+
+## Current project status / assessment
+- App fully stable at round start (rounds 1–8 complete): both modes browser-verified, engine PASS 13397/13397, lint clean, tsc clean, dev server healthy on :3000, DB cleaned to 0 sessions.
+- Round-3 QA pass (agent-browser, named session) found NO app bugs: Tables render + check/reveal, Practice setup → quiz → timed auto-finish → results → drill flow all work; no console errors. One leftover QA session found in DB (cleaned).
+- QA-environment hazard discovered & resolved: the shared unnamed agent-browser session ("default", left over from earlier rounds) was still attached and a concurrent client typed stray keystrokes into the app mid-QA, creating a phantom "dar 3/4" session (userAnswer "darab"). NOT an app bug — closed all browser sessions (`agent-browser close --all`), cleaned DB, re-verified everything in a fresh named session. Future agents: ALWAYS set `export AGENT_BROWSER_SESSION=...` and close stray sessions before QA.
+
+## Goals / completed modifications / verification results
+1. FEATURE — per-tense accuracy breakdown ("tense by tense" on results):
+   - Prisma: `tally String @default("{}")` column added to PracticeSession (JSON map tense → { c, t }); db:push'd. NOTE: the running dev server keeps the old Prisma client in memory — after ANY schema change, restart with `pkill -f "next dev"; sleep 2; rm -rf .next/dev; (setsid bun run dev > /dev/null 2>&1 < /dev/null &)` (symptom: INSERT generated without the new column → 500).
+   - POST /api/sessions: optional zod `tally` record (string key ≤120 → {c, t} ints 0..1000); normalizeTally clamps c ≤ t, drops t=0 entries, caps 40 keys; stored as JSON; returned parsed. curl-verified: {c:5,t:3}→{c:3,t:3}, t=0 dropped, negative c → 400.
+   - quiz-screen: `tallyRef` counts every answered question toward question.tense (exact/accent → c+1; wrong/skip → t only); folded into SessionSummary at finish.
+   - results-screen: new "tense by tense" section (shows when ≥4 tally questions): animated framer-motion width bars sorted WEAKEST-FIRST, tone by threshold (success ≥80% / primary ≥50% / destructive), mono label + "62% 5/8" readout, role=progressbar, scrollbar-thin max-h-72, staggered delays.
+2. FEATURE — daily goal + racha (day streak):
+   - GET /api/sessions/stats: new `daily` block — goal 20 (constant, exported), todayQuestions (local-calendar day buckets from a 2000-row scan of createdAt+total), streakDays (consecutive practiced days ending today OR yesterday — racha stays alive), bestStreakDays (longest run), activeToday. DST-safe day keys (YYYY-MM-DD local, parsed at noon).
+   - New src/components/practice/daily-strip.tsx on setup top (hidden until first session): flame badge (spring pop-in), "LA RACHA · SEP 19" + "N días seguidos" in Fraunces italic, animated progress bar toward the 20-question goal, success tint + "¡meta cumplida!" when met, warn hint "practice today to keep the racha alive" when streak not yet active today. Verified end-to-end (7/20 → 35% bar; todayQuestions aggregated across sessions correctly: 31 after 2 sessions).
+3. FEATURE — cross-mode verb drills ("quiz me on this verb"):
+   - verb-of-day: new Zap "quiz me" outline button (primary-tinted, always enabled) next to "study this verb".
+   - page.tsx: `quizVerb` state; TablesMode onQuizVerb → setQuizVerb + switch to practice; PracticeMode consumes it in a [quizVerb]-deps effect (calls onQuizVerbConsumed() so page clears it → exactly-once semantics), auto-starting an infinite verb drill.
+   - practice-mode: generalized drill system — `drill` + `drillLabel` (quiz chip) + `drillShort` (results mode line) + clearDrill(); startVerbDrill(verb) (verbs:[verb], infinite), startTenseDrill(tense) (tenses:[tense], verbs cleared, infinite); handleDrillMisses now labels "miss drill · N verbs". QuizScreen chip driven by drillLabel prop (covers verb/tense/miss drills); ResultsScreen mode line driven by drillShort ("verb drill · 01:18").
+   - Browser-verified: quiz-me on caer → "VERB DRILL · CAER" chip, all questions stayed in the caer pool across conjugation + EN→ES + ES→EN kinds; results mode line "VERB DRILL · 01:18".
+4. FEATURE — interactive analytics chips (focus panel + miss rows):
+   - GET /api/sessions/stats: new `hardestTenses` (top 4 by weakest aggregated tally accuracy, min 5 answers, tie-break by attempts) — curl-verified against seeded data.
+   - focus-panel: toughest-verb chips are now buttons (hover lift + primary border, active:scale-95, title/aria "drill …") → startVerbDrill; NEW "shakiest tenses" chip row (labelEs + pct%) → startTenseDrill. Verified: chips sorted weakest-first (pretérito 17% → imperfecto 80% → presente 83%), click → "TENSE DRILL · PRETÉRITO" session with pretérito-only questions.
+   - results-screen miss rows: verb is now a dotted-underline button → startVerbDrill(verb). Verified click → verb drill starts.
+5. FEATURE — shareable results: share button on results actions row (Web Share API when available, clipboard.writeText fallback + "Copied to clipboard" toast + 2.2s "copied" state). Text: "Tabla de Verbos — sesión de práctica / 34/40 correct · 85% accuracy / racha máxima 7 · mode line". Browser-verified (copied + toast).
+6. QA: engine PASS 13397/13397; tsc clean (src/); lint clean; no console/page errors; APIs all 200; dark mode verified programmatically (theme class + daily-strip computed colors: title L≈92, labels L≈67.5, bar visible); mobile 390px — programmatic overflow scan returned [] in both modes; VLM design review run (initial 6.5/10 — flags investigated: "dark mode broken" was my failed toggle click (verified working after proper toggle), sparkline single-dot is by-design with 1 session, "chips cut off" was screenshot viewport crop (no real overflow)); all test data cleaned (0 sessions), light theme restored.
+
+## Unresolved issues / risks / next-round priorities
+- MultiEdit proved non-atomic AGAIN (a failed multi-edit left a mangled line `const isses, setMisses]…` in quiz-screen.tsx — repaired via python line edit + full re-read). Future agents: use small single Edits; after ANY failed edit, re-read the file before retrying.
+- Dev server must be restarted after prisma schema changes (stale in-memory client) — procedure in section above.
+- The daily goal (20) is a constant exported from the stats route — natural next step: user-configurable goal persisted in localStorage.
+- Next-round candidate features (priority order): (1) streak calendar/heatmap (daily aggregates now exist — needs a `days` array in the stats response + a calendar grid component); (2) share/print results as an image card (canvas render of the summary); (3) per-question timing analytics (avgMsPerQuestion exists per session; per-tense timing could reveal slow tenses); (4) verb-of-the-day archive ("yesterday's verbs"); (5) records strip could include best day-streak.
+- QA screenshot artifacts: /home/z/my-project/qa/r3-*.png (10 files).

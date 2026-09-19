@@ -30,6 +30,7 @@ import { ROW_META, type RowKey } from "@/lib/conjugator/types";
 import { cn } from "@/lib/utils";
 
 import { FocusPanel } from "./focus-panel";
+import { DailyStrip } from "./daily-strip";
 import { RecordsStrip } from "./records-strip";
 import {
   CORE_TENSES,
@@ -107,6 +108,10 @@ interface SetupScreenProps {
   focusStats: FocusStatsResponse | null;
   /** start a focused drill built from the recent miss bank */
   onDrillMisses: () => void;
+  /** start a focused drill on a single verb */
+  onVerbDrill: (verb: string) => void;
+  /** start a focused drill on a single tense */
+  onTenseDrill: (tense: string) => void;
 }
 
 export function SetupScreen({
@@ -119,6 +124,8 @@ export function SetupScreen({
   sessionsLoading,
   focusStats,
   onDrillMisses,
+  onVerbDrill,
+  onTenseDrill,
 }: SetupScreenProps) {
   const toggleType = (kind: QuestionKind) => {
     const types = settings.types.includes(kind)
@@ -156,6 +163,11 @@ export function SetupScreen({
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
+      {/* daily goal + racha (needs at least one session on record) */}
+      {focusStats && focusStats.totals.sessions > 0 && (
+        <DailyStrip daily={focusStats.daily} />
+      )}
+
       {/* personal records */}
       <section aria-label="your records">
         <h2 className={cn(MICRO, "mb-3")}>your records</h2>
@@ -169,6 +181,8 @@ export function SetupScreen({
         loading={sessionsLoading}
         drillLoading={starting}
         onDrillMisses={onDrillMisses}
+        onVerbDrill={onVerbDrill}
+        onTenseDrill={onTenseDrill}
       />
 
       {/* session builder */}

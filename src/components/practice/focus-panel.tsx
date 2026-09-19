@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import { ROW_META, type RowKey } from "@/lib/conjugator/types";
 import { cn } from "@/lib/utils";
 
 import { MICRO, timeAgo, type FocusStatsResponse } from "./types";
@@ -180,6 +181,10 @@ interface FocusPanelProps {
   loading: boolean;
   drillLoading: boolean;
   onDrillMisses: () => void;
+  /** start a focused drill on a single verb (chip tap) */
+  onVerbDrill: (verb: string) => void;
+  /** start a focused drill on a single tense (chip tap) */
+  onTenseDrill: (tense: string) => void;
 }
 
 export function FocusPanel({
@@ -187,6 +192,8 @@ export function FocusPanel({
   loading,
   drillLoading,
   onDrillMisses,
+  onVerbDrill,
+  onTenseDrill,
 }: FocusPanelProps) {
   if (loading) {
     return (
@@ -210,7 +217,7 @@ export function FocusPanel({
   // no sessions yet — records strip already shows the empty state
   if (!stats || stats.totals.sessions === 0) return null;
 
-  const { trend, trendDelta, hardestVerbs, recentMisses } = stats;
+  const { trend, trendDelta, hardestVerbs, hardestTenses, recentMisses } = stats;
   const drillVerbs = new Set(recentMisses.map((m) => m.verb));
   const dayLabel = (iso: string) =>
     new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -243,43 +250,81 @@ export function FocusPanel({
               }}
             />
 
-            {/* toughest verbs */}
-            <div className="min-w-0">
-              <p className={MICRO}>toughest verbs</p>
-              {hardestVerbs.length === 0 ? (
-                <p className="mt-2.5 flex items-center gap-2 text-sm text-muted-foreground">
-                  <Sparkles
-                    className="size-4 shrink-0 text-success"
-                    aria-hidden="true"
-                  />
-                  no misses on record — ¡impecable!
-                </p>
-              ) : (
-                <ul className="mt-2.5 flex flex-wrap gap-1.5">
-                  {hardestVerbs.slice(0, 6).map((v, i) => (
-                    <li key={v.verb}>
-                      <span
-                        title={`missed ${v.count}× · last ${timeAgo(v.lastMissedAt)}`}
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px]",
-                          i === 0
-                            ? "border-destructive/30 bg-destructive/[0.06]"
-                            : "border-border bg-secondary/50"
-                        )}
-                      >
-                        <span className="font-medium">{v.verb}</span>
-                        <span
+            {/* toughest verbs + shakiest tenses */}
+            <div className="min-w-0 space-y-5">
+              <div>
+                <p className={MICRO}>toughest verbs</p>
+                {hardestVerbs.length === 0 ? (
+                  <p className="mt-2.5 flex items-center gap-2 text-sm text-muted-foreground">
+                    <Sparkles
+                      className="size-4 shrink-0 text-success"
+                      aria-hidden="true"
+                    />
+                    no misses on record — ¡impecable!
+                  </p>
+                ) : (
+                  <ul className="mt-2.5 flex flex-wrap gap-1.5">
+                    {hardestVerbs.slice(0, 6).map((v, i) => (
+                      <li key={v.verb}>
+                        <button
+                          type="button"
+                          onClick={() => onVerbDrill(v.verb)}
+                          title={`missed ${v.count}× · last ${timeAgo(
+                            v.lastMissedAt
+                          )} · tap to drill this verb`}
+                          aria-label={`drill the verb ${v.verb} — missed ${v.count} times`}
                           className={cn(
-                            "tabular-nums",
-                            i === 0 ? "text-destructive" : "text-muted-foreground"
+                            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-all outline-none hover:border-primary/50 hover:bg-primary/[0.05] focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-95",
+                            i === 0
+                              ? "border-destructive/30 bg-destructive/[0.06]"
+                              : "border-border bg-secondary/50"
                           )}
                         >
-                          ×{v.count}
-                        </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                          <span className="font-medium">{v.verb}</span>
+                          <span
+                            className={cn(
+                              "tabular-nums",
+                              i === 0
+                                ? "text-destructive"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            ×{v.count}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {hardestTenses.length > 0 && (
+                <div>
+                  <p className={MICRO}>shakiest tenses</p>
+                  <ul className="mt-2.5 flex flex-wrap gap-1.5">
+                    {hardestTenses.map((t) => {
+                      const label =
+                        ROW_META[t.tense as RowKey]?.labelEs ?? t.tense;
+                      const pct = Math.round((t.c / t.t) * 100);
+                      return (
+                        <li key={t.tense}>
+                          <button
+                            type="button"
+                            onClick={() => onTenseDrill(t.tense)}
+                            title={`${t.c}/${t.t} correct — tap to drill this tense`}
+                            aria-label={`drill ${label} — ${pct}% accuracy over ${t.t} answers`}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-1 font-mono text-[11px] transition-all outline-none hover:border-primary/50 hover:bg-primary/[0.05] focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-95"
+                          >
+                            <span className="font-medium">{label}</span>
+                            <span className="tabular-nums text-muted-foreground">
+                              {pct}%
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               )}
             </div>
           </div>

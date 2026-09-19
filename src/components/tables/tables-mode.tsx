@@ -57,7 +57,12 @@ interface PersistedState {
   answers: AnswersMap;
 }
 
-export default function TablesMode() {
+interface TablesModeProps {
+  /** hand a verb to Practice mode for a focused quiz ("quiz me") */
+  onQuizVerb?: (verb: string) => void;
+}
+
+export default function TablesMode({ onQuizVerb }: TablesModeProps) {
   const { toast } = useToast();
 
   const [verb, setVerb] = useState("hablar");
@@ -291,7 +296,11 @@ export default function TablesMode() {
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
       {/* ── verb of the day spotlight ── */}
-      <VerbOfDay current={verb} onPick={handleVerbChange} />
+      <VerbOfDay
+        current={verb}
+        onPick={handleVerbChange}
+        onQuiz={(v) => onQuizVerb?.(v)}
+      />
 
       {/* ── controls ── */}
       <Card className="bg-dotted gap-0 p-4 sm:p-6">

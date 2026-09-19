@@ -27,6 +27,16 @@ const bodySchema = z.object({
   accentWarnings: z.number().int().min(0).max(1000),
   // loose records — each miss is normalized (trimmed + length-capped) below
   misses: z.array(z.record(z.string(), z.unknown())).max(50).optional(),
+  // per-tense answer counts: tense → { c: correct, t: total }
+  tally: z
+    .record(
+      z.string().max(120),
+      z.object({
+        c: z.number().int().min(0).max(1000),
+        t: z.number().int().min(0).max(1000),
+      })
+    )
+    .optional(),
 });
 
 /** normalized missed-question record persisted as JSON */
@@ -57,6 +67,26 @@ function normalizeMiss(raw: Record<string, unknown>): MissRecord {
     expected: capStr(raw.expected, 120),
     userAnswer: capStr(raw.userAnswer, 120),
   };
+}
+
+/** per-tense answer counts — keys capped, c clamped to t, empty t dropped */
+function normalizeTally(
+  raw: Record<string, { c: number; t: number }> | undefined
+): Record<string, { c: number; t: number }> {
+  if (!raw) return {};
+  const out: Record<string, { c: number; t: number }> = {};
+  let keys = 0;
+  for (const [tenseRaw, counts] of Object.entries(raw)) {
+    if (keys >= 40) break; // defensive cap
+    const tense = tenseRaw.trim().slice(0, 120);
+    if (!tense || !counts || counts.t <= 0) continue;
+    out[tense] = {
+      t: Math.min(1000, counts.t),
+      c: Math.min(Math.min(1000, counts.t), Math.max(0, counts.c)),
+    };
+    keys++;
+  }
+  return out;
 }
 
 export async function POST(request: Request) {
@@ -93,6 +123,7 @@ export async function POST(request: Request) {
   }
 
   const misses = (parsed.data.misses ?? []).map(normalizeMiss);
+  const tally = normalizeTally(parsed.data.tally);
 
   try {
     const session = await db.practiceSession.create({
@@ -106,6 +137,7 @@ export async function POST(request: Request) {
         avgMsPerQuestion,
         accentWarnings,
         misses: JSON.stringify(misses),
+        tally: JSON.stringify(tally),
       },
     });
 
@@ -122,6 +154,7 @@ export async function POST(request: Request) {
           avgMsPerQuestion: session.avgMsPerQuestion,
           accentWarnings: session.accentWarnings,
           misses,
+          tally,
           createdAt: session.createdAt,
         },
       },
