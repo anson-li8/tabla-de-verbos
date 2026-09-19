@@ -85,13 +85,28 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
 
         <div className="divide-y">
           <ShortcutRow
-            keys={["1", "2"]}
+            keys={["1", "2", "3"]}
             label="switch modes"
-            note="1 · tables — 2 · practice (T / P also work)"
+            note="1 · tables — 2 · practice — 3 · cards (T / P / C also work)"
           />
           <ShortcutRow
             keys={["?"]}
             label="toggle this cheatsheet"
+          />
+          <ShortcutRow
+            keys={["Space"]}
+            label="flip the flashcard"
+            note="cards mode — also Enter, or just click the card"
+          />
+          <ShortcutRow
+            keys={["←", "→"]}
+            label="walk the flashcard deck"
+            note="cards mode — wraps around at both ends"
+          />
+          <ShortcutRow
+            keys={["S"]}
+            label="hear the card in Spanish"
+            note="cards mode — browser speech, works offline"
           />
           <ShortcutRow
             keys={["Enter"]}

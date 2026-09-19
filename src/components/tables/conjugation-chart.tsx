@@ -83,6 +83,56 @@ function verdictState(verdict?: AnyVerdict): VerdictState {
   return verdict.correct ? "correct" : "wrong";
 }
 
+// ── per-group mastery meter (chart header) ──────────────────
+
+/**
+ * Five slim segmented bars — one per row group — showing how much
+ * of this verb's chart is mastered for the current subject.
+ * Complete groups go green; partial fills stay brick-red.
+ */
+function GroupMasteryBars({ masteredRows }: { masteredRows: Set<RowKey> }) {
+  const summary = GROUPS.map((g) => {
+    const total = g.rows.length;
+    const mastered = g.rows.filter((r) => masteredRows.has(r.key)).length;
+    return { group: g.group, label: GROUP_META[g.group].es, mastered, total };
+  });
+  const ariaLabel = `mastery by group — ${summary
+    .map((s) => `${s.label} ${s.mastered}/${s.total}`)
+    .join(", ")}`;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5" role="img" aria-label={ariaLabel}>
+      <span className="font-mono text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground/70">
+        dominio
+      </span>
+      {summary.map((s) => {
+        const pct = s.total > 0 ? (s.mastered / s.total) * 100 : 0;
+        const complete = s.mastered === s.total && s.total > 0;
+        return (
+          <Tooltip key={s.group}>
+            <TooltipTrigger asChild>
+              <span
+                tabIndex={0}
+                className="relative block h-1.5 w-9 cursor-default overflow-hidden rounded-full bg-muted-foreground/15 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <span
+                  className={cn(
+                    "absolute inset-y-0 left-0 rounded-full transition-[width] duration-500 ease-out",
+                    complete ? "bg-success" : "bg-primary"
+                  )}
+                  style={{ width: `${pct}%` }}
+                />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="font-mono text-[10px]">
+              {s.label} · {s.mastered}/{s.total} rows mastered
+            </TooltipContent>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── cells ────────────────────────────────────────────────────
 
 interface InputCellProps {
@@ -334,6 +384,7 @@ export function ConjugationChart({
         <CardDescription className="font-mono text-[11px] tracking-wide">
           {verbGlosses(verb)}
         </CardDescription>
+        <GroupMasteryBars masteredRows={masteredRows} />
         <CardAction className="self-center">
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge

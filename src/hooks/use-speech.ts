@@ -6,9 +6,32 @@
 // picks the best available Spanish voice and degrades silently.
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
-/** true when the browser exposes speechSynthesis (nearly all do) */
+const noopSubscribe = () => () => {};
+
+/**
+ * true when the browser exposes speechSynthesis (nearly all do).
+ * Hydration-safe: returns false during SSR AND the hydration render
+ * (matching the server HTML), then flips to the real value after mount —
+ * no server/client mismatch. The classic useSyncExternalStore pattern
+ * from the React docs.
+ */
+export function useSpeechSupported(): boolean {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => typeof window !== "undefined" && "speechSynthesis" in window,
+    () => false,
+  );
+}
+
+/** imperative check — safe in event handlers/effects only, NOT during render */
 export function speechSupported(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
@@ -39,7 +62,7 @@ export interface UseSpeechResult {
 export function useSpeech(): UseSpeechResult {
   const [speaking, setSpeaking] = useState(false);
   const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
-  const supported = speechSupported();
+  const supported = useSpeechSupported();
 
   // voices load asynchronously in most browsers — refresh the pick
   // whenever the list changes

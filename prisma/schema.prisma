@@ -31,3 +31,13 @@ model PracticeSession {
   tally            String   @default("{}") // JSON map: tense → { c, t }
   createdAt        DateTime @default(now())
 }
+
+// A claimed "streak freeze" (seguro de racha): the user missed
+// exactly one day right after a live streak; the freeze keeps the
+// racha alive. Max one freeze per rolling 7-day window.
+model StreakFreeze {
+  id        String   @id @default(cuid())
+  // the calendar day (local server midnight) that was frozen
+  frozenFor DateTime
+  createdAt DateTime @default(now())
+}

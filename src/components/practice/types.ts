@@ -149,6 +149,12 @@ export interface DailyStats {
   streakDays: number;
   bestStreakDays: number;
   activeToday: boolean;
+  /** true when a live streak missed exactly yesterday — offer the seguro */
+  freezeOffer: boolean;
+  /** the run a freeze would restore (0 when no offer) */
+  freezableStreak: number;
+  /** true when yesterday was frozen — the racha survived the missed day */
+  frozenYesterday: boolean;
   /** sparse day counts over the last 24 weeks, oldest → newest */
   days: DayCount[];
 }

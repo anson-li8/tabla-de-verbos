@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { BadgeCheck, Check, ChevronsUpDown, EyeOff } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +46,42 @@ const normalize = (value: string) =>
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
+
+/** accent-normalized first letter, uppercased — the A–Z rail key */
+const firstLetter = (verb: string) => normalize(verb).charAt(0).toUpperCase();
+
+/**
+ * A–Z quick-jump rail — sits along the right edge of the verb
+ * list. One button per letter that actually has verbs (respecting
+ * the current search + filters); clicking scrolls the first match
+ * to the top of the list.
+ */
+function AzRail({
+  letters,
+  onJump,
+}: {
+  letters: string[];
+  onJump: (letter: string) => void;
+}) {
+  return (
+    <nav
+      aria-label="jump to verbs by first letter"
+      className="absolute right-1 top-1 bottom-1 z-10 flex flex-col items-center justify-start gap-px py-1"
+    >
+      {letters.map((letter) => (
+        <button
+          key={letter}
+          type="button"
+          onClick={() => onJump(letter)}
+          aria-label={`jump to verbs starting with ${letter}`}
+          className="flex size-3.5 items-center justify-center rounded-[4px] font-mono text-[9px] font-semibold leading-none text-muted-foreground/60 outline-none transition-colors hover:bg-primary/10 hover:text-primary focus-visible:ring-[2px] focus-visible:ring-ring/60"
+        >
+          {letter}
+        </button>
+      ))}
+    </nav>
+  );
+}
 
 interface VerbPickerProps {
   value: string;
@@ -94,6 +130,24 @@ export function VerbPicker({ value, level, onChange, subject, mastery }: VerbPic
   const subjectPronoun =
     SUBJECTS.find((s) => s.key === subject)?.pronoun ?? subject;
 
+  // verb list ref — the A–Z rail scrolls items inside it
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const jumpToLetter = useCallback(
+    (letter: string) => {
+      const list = listRef.current;
+      if (!list) return;
+      const items = Array.from(
+        list.querySelectorAll<HTMLElement>("[data-verb]"),
+      );
+      const target = items.find((item) =>
+        firstLetter(item.dataset.verb ?? "") === letter,
+      );
+      target?.scrollIntoView({ block: "start" });
+    },
+    [],
+  );
+
   const groups = useMemo(() => {
     const result: { level: 5 | 6; label: string; verbs: string[] }[] = [];
     const polish = (verbs: readonly string[]) => {
@@ -127,6 +181,18 @@ export function VerbPicker({ value, level, onChange, subject, mastery }: VerbPic
   // Current verb is kept even when it falls outside the level filter —
   // flag it with a saffron badge so the state is clear.
   const offFilter = level !== "all" && verbLevel(value) !== level;
+
+  // letters that actually have verbs right now (search + filters
+  // respected — mirrors the cmdk value/filter logic)
+  const letters = useMemo(() => {
+    const q = normalize(search.trim());
+    const source = groups
+      .flatMap((g) => g.verbs)
+      .filter(
+        (v) => !q || normalize(`${v} ${verbGlosses(v)}`).includes(q),
+      );
+    return [...new Set(source.map(firstLetter))].sort();
+  }, [groups, search]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -236,7 +302,14 @@ export function VerbPicker({ value, level, onChange, subject, mastery }: VerbPic
               hide mastered
             </button>
           </div>
-          <CommandList className="max-h-72 scrollbar-thin">
+          <div className="relative">
+            {letters.length > 1 && (
+              <AzRail letters={letters} onJump={jumpToLetter} />
+            )}
+            <CommandList
+              ref={listRef}
+              className="max-h-72 scrollbar-thin pr-6"
+            >
             {search.trim() ? (
               <CommandEmpty className="py-6 text-center font-mono text-xs text-muted-foreground">
                 no verb matches that search.
@@ -267,6 +340,7 @@ export function VerbPicker({ value, level, onChange, subject, mastery }: VerbPic
                     <CommandItem
                       key={verb}
                       value={`${verb} ${verbGlosses(verb)}`}
+                      data-verb={verb}
                       onSelect={() => {
                         onChange(verb);
                         setOpen(false);
@@ -332,7 +406,8 @@ export function VerbPicker({ value, level, onChange, subject, mastery }: VerbPic
                 {groups.reduce((a, g) => a + g.verbs.length, 0)}
               </p>
             )}
-          </CommandList>
+            </CommandList>
+          </div>
         </Command>
       </PopoverContent>
     </Popover>

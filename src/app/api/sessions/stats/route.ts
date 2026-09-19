@@ -331,17 +331,55 @@ export async function GET() {
       dayTotals.set(k, (dayTotals.get(k) ?? 0) + r.total);
     }
     const activeToday = dayTotals.has(todayK);
+
+    // ── streak freezes (seguro de racha) ─────────────────────
+    // A frozen day bridges a single missed day forever (the
+    // claim itself is rate-limited to one per 7-day window by
+    // POST /api/streak-freeze — here we just honor the marks).
+    const freezeRows = await db.streakFreeze.findMany({
+      orderBy: { frozenFor: "desc" },
+    });
+    const frozenKeys = new Set(freezeRows.map((f) => dayKey(f.frozenFor)));
+    const frozenYesterday = frozenKeys.has(yesterdayK);
+    const recentFreezeClaim = freezeRows.find(
+      (f) => f.createdAt.getTime() >= today.getTime() - 7 * 86_400_000,
+    );
+    const beforeYesterdayK = dayKey(new Date(today.getTime() - 2 * 86_400_000));
+
     // the racha counts consecutive practiced days ending today —
-    // or ending yesterday (still alive, just not practiced yet today)
+    // or ending yesterday (still alive, just not practiced yet
+    // today). Frozen days keep the chain alive without counting.
+    const hasPracticeOrFreeze = (d: Date) =>
+      dayTotals.has(dayKey(d)) || frozenKeys.has(dayKey(d));
     let streakDays = 0;
     let cursor = activeToday
       ? today
-      : dayTotals.has(yesterdayK)
+      : hasPracticeOrFreeze(yesterday)
         ? yesterday
         : null;
-    while (cursor && dayTotals.has(dayKey(cursor))) {
-      streakDays++;
+    while (cursor && hasPracticeOrFreeze(cursor)) {
+      if (dayTotals.has(dayKey(cursor))) streakDays++;
       cursor = new Date(cursor.getTime() - 86_400_000);
+    }
+
+    // freeze offer: a live streak missed exactly yesterday, not
+    // yet frozen, and no freeze claimed this week. freezableStreak
+    // is the run that a freeze would restore (consecutive practiced
+    // days ending the day before yesterday).
+    const beforeYesterday = new Date(today.getTime() - 2 * 86_400_000);
+    const freezeOffer =
+      !activeToday &&
+      !dayTotals.has(yesterdayK) &&
+      !frozenYesterday &&
+      dayTotals.has(beforeYesterdayK) &&
+      !recentFreezeClaim;
+    let freezableStreak = 0;
+    if (freezeOffer) {
+      let c = beforeYesterday;
+      while (c && dayTotals.has(dayKey(c))) {
+        freezableStreak++;
+        c = new Date(c.getTime() - 86_400_000);
+      }
     }
     // longest run across the whole scanned history
     let bestStreakDays = 0;
@@ -378,6 +416,9 @@ export async function GET() {
         streakDays,
         bestStreakDays,
         activeToday,
+        freezeOffer,
+        freezableStreak,
+        frozenYesterday,
         days,
       },
       totals: { sessions: chrono.length, missCount },

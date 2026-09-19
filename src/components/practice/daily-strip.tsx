@@ -9,9 +9,11 @@
 // GET /api/sessions/stats.
 // ─────────────────────────────────────────────────────────────
 
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Flame, PencilLine } from "lucide-react";
+import { Flame, Loader2, PencilLine, Snowflake } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -28,6 +30,8 @@ interface DailyStripProps {
   /** the user's explicit pick, if any — highlights the preset */
   userGoal: number | null;
   onGoalChange: (goal: number) => void;
+  /** claim the streak freeze (seguro de racha) — resolves true on success */
+  onClaimFreeze: () => Promise<boolean>;
 }
 
 export function DailyStrip({
@@ -35,8 +39,20 @@ export function DailyStrip({
   goal,
   userGoal,
   onGoalChange,
+  onClaimFreeze,
 }: DailyStripProps) {
   const { todayQuestions, streakDays, activeToday } = daily;
+  const [claiming, setClaiming] = useState(false);
+  const [claimError, setClaimError] = useState(false);
+
+  const handleClaim = async () => {
+    if (claiming) return;
+    setClaiming(true);
+    setClaimError(false);
+    const ok = await onClaimFreeze();
+    setClaiming(false);
+    if (!ok) setClaimError(true);
+  };
   const goalMet = todayQuestions >= goal;
   const pct = Math.min(100, Math.round((todayQuestions / goal) * 100));
   const streakAlive = activeToday || streakDays > 0;
@@ -75,8 +91,17 @@ export function DailyStrip({
             <Flame className="size-5" aria-hidden="true" />
           </motion.span>
           <div>
-            <p className="font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               la racha · {dateLabel}
+              {daily.frozenYesterday && (
+                <span
+                  title="yesterday was frozen — the racha survived"
+                  className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/[0.07] px-1.5 py-0.5 text-[8px] tracking-[0.12em] text-primary"
+                >
+                  <Snowflake className="size-2.5" aria-hidden="true" />
+                  protegida
+                </span>
+              )}
             </p>
             <p className="mt-0.5 leading-tight">
               {streakAlive ? (
@@ -181,13 +206,62 @@ export function DailyStrip({
               transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
             />
           </div>
-          {!activeToday && streakDays > 0 && (
+          {!activeToday && streakDays > 0 && !daily.freezeOffer && (
             <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-warn">
               practice today to keep the racha alive
             </p>
           )}
         </div>
       </div>
+
+      {/* streak insurance offer — a live racha missed exactly yesterday */}
+      {daily.freezeOffer && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+          className="overflow-hidden border-t border-primary/15 bg-primary/[0.05]"
+        >
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
+            <Snowflake
+              className="size-4 shrink-0 text-primary"
+              aria-hidden="true"
+            />
+            <p className="min-w-0 flex-1 text-xs leading-snug text-muted-foreground">
+              you missed yesterday — your{" "}
+              <span className="font-semibold text-foreground">
+                {Math.max(1, daily.freezableStreak)}-day racha
+              </span>{" "}
+              can still be saved.{" "}
+              <span className="text-muted-foreground/70">
+                (one freeze per week)
+              </span>
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleClaim}
+              disabled={claiming}
+              className={cn(
+                "h-9 gap-1.5 rounded-lg border-primary/30 px-3 font-mono text-[10px] uppercase tracking-[0.12em] text-primary hover:border-primary/50 hover:bg-primary/5",
+                claiming && "opacity-70",
+              )}
+            >
+              {claiming ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Snowflake className="size-3.5" aria-hidden="true" />
+              )}
+              reclamar el seguro
+            </Button>
+          </div>
+          {claimError && (
+            <p className="px-4 pb-3 font-mono text-[10px] uppercase tracking-[0.1em] text-destructive sm:px-5">
+              couldn't claim the freeze — try again in a moment
+            </p>
+          )}
+        </motion.div>
+      )}
     </motion.aside>
   );
 }

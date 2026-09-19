@@ -116,6 +116,8 @@ interface SetupScreenProps {
   syncedNotice: number;
   /** retry the offline-queue flush now */
   onRetrySync: () => void;
+  /** claim the streak freeze (seguro de racha) */
+  onClaimFreeze: () => Promise<boolean>;
   /** start a focused drill built from the recent miss bank */
   onDrillMisses: () => void;
   /** start a focused drill on a single verb */
@@ -136,6 +138,7 @@ export function SetupScreen({
   queuedSessions,
   syncedNotice,
   onRetrySync,
+  onClaimFreeze,
   onDrillMisses,
   onVerbDrill,
   onTenseDrill,
@@ -243,6 +246,7 @@ export function SetupScreen({
           goal={goal}
           userGoal={userGoal}
           onGoalChange={saveGoal}
+          onClaimFreeze={onClaimFreeze}
         />
       )}
 

@@ -8,6 +8,7 @@ import { InstallHint } from "@/components/app/install-hint";
 import { LogoMark } from "@/components/app/logo-mark";
 import { ModeSwitcher, type AppMode } from "@/components/app/mode-switcher";
 import { ThemeToggle } from "@/components/app/theme-toggle";
+import FlashcardsMode from "@/components/cards/flashcards-mode";
 import PracticeMode from "@/components/practice/practice-mode";
 import TablesMode from "@/components/tables/tables-mode";
 import {
@@ -28,8 +29,8 @@ export default function Home() {
     setMode("practice");
   };
 
-  // keyboard shortcuts: 1 / 2 (or T / P) jump between modes, ?
-  // opens the cheatsheet — ignored while typing in an input, using
+  // keyboard shortcuts: 1 / 2 / 3 (or T / P / C) jump between modes,
+  // ? opens the cheatsheet — ignored while typing in an input, using
   // modifiers, or when a dialog is open
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -46,7 +47,7 @@ export default function Home() {
       }
       if (
         document.querySelector(
-          "[role=alertdialog][data-state=open], [role=dialog][data-state=open]"
+          "[role=alertdialog][data-state=open], [role=dialog][data-state=open], [data-radix-popper-content-wrapper]"
         )
       ) {
         return;
@@ -54,6 +55,7 @@ export default function Home() {
       const key = e.key.toLowerCase();
       if (key === "1" || key === "t") setMode("tables");
       else if (key === "2" || key === "p") setMode("practice");
+      else if (key === "3" || key === "c") setMode("cards");
       else if (e.key === "?") setHelpOpen(true);
     };
     window.addEventListener("keydown", onKey);
@@ -97,6 +99,8 @@ export default function Home() {
           >
             {mode === "tables" ? (
               <TablesMode onQuizVerb={handleQuizVerb} />
+            ) : mode === "cards" ? (
+              <FlashcardsMode />
             ) : (
               <PracticeMode
                 quizVerb={quizVerb}
@@ -114,7 +118,7 @@ export default function Home() {
             {SUBJECTS.length} subjects
           </p>
           <p className="font-display text-[12px] italic text-muted-foreground/80">
-            <span className="hidden sm:inline">press 1 / 2 to switch modes · </span>
+            <span className="hidden sm:inline">press 1 / 2 / 3 to switch modes · </span>
             <span className="hidden md:inline">arrows + enter to fill the chart · </span>
             <span>? for shortcuts · </span>
             accents count

@@ -295,6 +295,19 @@ export default function PracticeMode({
     setScreen("setup");
   }, []);
 
+  // claim the streak freeze (seguro de racha) — POST, then
+  // refresh so the racha strip reflects the restored streak
+  const handleClaimFreeze = useCallback(async () => {
+    try {
+      const res = await fetch("/api/streak-freeze", { method: "POST" });
+      if (!res.ok) return false;
+      await refreshSessions();
+      return true;
+    } catch {
+      return false;
+    }
+  }, [refreshSessions]);
+
   return (
     <div className="w-full">
       <AnimatePresence mode="wait">
@@ -312,6 +325,7 @@ export default function PracticeMode({
               queuedSessions={queuedSessions}
               syncedNotice={syncedNotice}
               onRetrySync={() => void tryFlushQueue(true)}
+              onClaimFreeze={handleClaimFreeze}
               onDrillMisses={() =>
                 handleDrillMisses(focusStats?.recentMisses ?? [])
               }
