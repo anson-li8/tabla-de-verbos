@@ -1,0 +1,804 @@
+     1→// ─────────────────────────────────────────────────────────────
+     2→// Tabla de Verbos — conjugation engine
+     3→//
+     4→// Faithful TypeScript port of the legacy app's
+     5→// upload/solution_constructor.js + upload/constants.js.
+     6→// The original wrote answers into DOM inputs; here the exact same
+     7→// logic produces plain string arrays (one entry per accepted answer,
+     8→// e.g. -ra/-se subjunctive, ¡…! command variants, alternative
+     9→// participles, both reflexive gerund spellings).
+    10→// ─────────────────────────────────────────────────────────────
+    11→
+    12→import {
+    13→  AR,
+    14→  E_I,
+    15→  E_IE,
+    16→  IR,
+    17→  NO_SC,
+    18→  O_UE,
+    19→  ROW_META,
+    20→  SUBJECT_INDEX,
+    21→  TENSE_ROWS,
+    22→  VERBS,
+    23→} from "./types";
+    24→import type { RowGroup, RowKey, SubjectKey, VerbAttrs } from "./types";
+    25→
+    26→export interface ConjugationRow {
+    27→  key: RowKey;
+    28→  group: RowGroup;
+    29→  labelEs: string;
+    30→  labelEn: string;
+    31→  /** ALL acceptable Spanish answers */
+    32→  spanish: string[];
+    33→  /** ALL acceptable English answers; FIRST item is the canonical display form */
+    34→  english: string[];
+    35→}
+    36→
+    37→// ── Legacy constants (upload/constants.js) ───────────────────
+    38→
+    39→/** numeric subject indexes */
+    40→const YO = 0;
+    41→const TU = 1;
+    42→const EL = 2;
+    43→const NOSOTROS = 3;
+    44→const ELLOS = 4;
+    45→/** vosotros: exists only as an array index (6-entry ending/subjunctive arrays); never a question subject */
+    46→const VOSOTROS = 5;
+    47→
+    48→const REFLEXIVE_PRONOUNS = ["me", "te", "se", "nos", "se", "os"];
+    49→
+    50→const PRES_ENDINGS = [
+    51→  ["o", "as", "a", "amos", "an", "áis"],
+    52→  ["o", "es", "e", "emos", "en", "éis"],
+    53→  ["o", "es", "e", "imos", "en", "ís"],
+    54→];
+    55→
+    56→const IMP_ENDINGS = [
+    57→  ["aba", "abas", "aba", "ábamos", "aban"],
+    58→  ["ía", "ías", "ía", "íamos", "ían"],
+    59→];
+    60→
+    61→const PRET_ENDINGS = [
+    62→  ["é", "aste", "ó", "amos", "aron"],
+    63→  ["í", "iste", "ió", "imos", "ieron"],
+    64→];
+    65→
+    66→const HABER_PRES = ["he", "has", "ha", "hemos", "han"];
+    67→const FUT_ENDINGS = ["é", "ás", "á", "emos", "án"];
+    68→const HABER_SUBJ = ["haya", "hayas", "haya", "hayamos", "hayan"];
+    69→const HABER_IMP_SUBJ = [
+    70→  ["hubiera", "hubieras", "hubiera", "hubiéramos", "hubieran"],
+    71→  ["hubiese", "hubieses", "hubiese", "hubiésemos", "hubiesen"],
+    72→];
+    73→const IMP_SUBJ_ENDINGS = [
+    74→  ["ra", "ras", "ra", "ramos", "ran"],
+    75→  ["se", "ses", "se", "semos", "sen"],
+    76→];
+    77→
+    78→/** English subject pronouns, indexed by subject (yo=0 … ellos=4). */
+    79→const E_SUBS = ["i", "you", "he", "we", "they"];
+    80→
+    81→function dedup(items: string[]): string[] {
+    82→  return [...new Set(items)];
+    83→}
+    84→
+    85→// ── Low-level helpers (ported 1:1 from solution_constructor.js) ──
+    86→
+    87→/**
+    88→ * Add an accent to the LAST (unaccented) vowel of the fragment.
+    89→ * Legacy hack used for the nosotros imperfect subjunctive
+    90→ * ("tuvie " → "tuvié") and reflexive affirmative commands ("sient" → "siént").
+    91→ */
+    92→function addAccent(word: string): string {
+    93→  let tup = word;
+    94→  for (let i = tup.length - 1; i >= 0; i--) {
+    95→    const ch = tup.substring(i, i + 1);
+    96→    if (ch === "a") {
+    97→      tup = tup.substring(0, i) + "á" + tup.substring(i + 1);
+    98→      break;
+    99→    } else if (ch === "e") {
+   100→      tup = tup.substring(0, i) + "é" + tup.substring(i + 1);
+   101→      break;
+   102→    } else if (ch === "i") {
+   103→      tup = tup.substring(0, i) + "í" + tup.substring(i + 1);
+   104→      break;
+   105→    } else if (ch === "o") {
+   106→      tup = tup.substring(0, i) + "ó" + tup.substring(i + 1);
+   107→      break;
+   108→    } else if (ch === "u") {
+   109→      tup = tup.substring(0, i) + "ú" + tup.substring(i + 1);
+   110→      break;
+   111→    }
+   112→  }
+   113→  return tup;
+   114→}
+   115→
+   116→/**
+   117→ * Apply the verb's stem change.
+   118→ * `oneLetter` selects the single-letter variant (e→i / o→u) used in
+   119→ * gerunds and 3rd-person preterites of -ir verbs.
+   120→ */
+   121→function stemChange(stem: string, type: number, oneLetter: boolean): string {
+   122→  if (type === NO_SC) {
+   123→    return stem;
+   124→  }
+   125→  let tbr: string | undefined;
+   126→  let i: number;
+   127→  for (i = stem.length - 1; i >= 0; i--) {
+   128→    const ch = stem.substring(i, i + 1);
+   129→    if (ch === "e") {
+   130→      if (type === E_IE) {
+   131→        tbr = oneLetter
+   132→          ? stem.substring(0, i) + "i"
+   133→          : stem.substring(0, i) + "ie";
+   134→        break;
+   135→      } else if (type === E_I) {
+   136→        tbr = stem.substring(0, i) + "i";
+   137→        break;
+   138→      }
+   139→    } else if (ch === "o") {
+   140→      if (type === O_UE) {
+   141→        tbr = oneLetter
+   142→          ? stem.substring(0, i) + "u"
+   143→          : stem.substring(0, i) + "ue";
+   144→        break;
+   145→      }
+   146→    }
+   147→  }
+   148→  if (tbr === undefined) {
+   149→    // no matching vowel in the stem — cannot happen with the bundled verb
+   150→    // data, but keep the engine total.
+   151→    return stem;
+   152→  }
+   153→  if (i !== stem.length - 1) {
+   154→    tbr += stem.substring(i + 1);
+   155→  }
+   156→  return tbr;
+   157→}
+   158→
+   159→/** 1st person singular present (specialForms.yo / boot / stemChange + "o"). */
+   160→function getYo(stem: string, attr: VerbAttrs): string {
+   161→  if (attr.specialForms.yo == null) {
+   162→    if (attr.specialForms.boot == null) {
+   163→      return stemChange(stem, attr.stemChangeType, false) + "o";
+   164→    }
+   165→    return attr.specialForms.boot + "o";
+   166→  }
+   167→  return attr.specialForms.yo + "o";
+   168→}
+   169→
+   170→/**
+   171→ * 3rd person preterite: -ir verbs take the one-letter stem change, then the
+   172→ * "i" of -ió/-ieron is dropped or the stem-final a/e/u turns into "y"
+   173→ * (huir → huyó, creer → creyó, caer → cayó). specialForms.pret wins last.
+   174→ */
+   175→function getEllos(stem: string, attr: VerbAttrs, sujeto: number): string {
+   176→  let pret: string;
+   177→  const idx = sujeto === EL ? 3 : 6;
+   178→  const sujIdx = attr.endingType === AR ? 0 : 1;
+   179→  if (attr.endingType === IR) {
+   180→    pret = stemChange(stem, attr.stemChangeType, true) + PRET_ENDINGS[sujIdx][sujeto];
+   181→  } else {
+   182→    pret = stem + PRET_ENDINGS[sujIdx][sujeto];
+   183→  }
+   184→  if (sujIdx === 1) {
+   185→    const start = pret.length - idx;
+   186→    const end = pret.length - idx + 1;
+   187→    const ch = pret.substring(start, end);
+   188→    const prev = pret.substring(start - 1, start);
+   189→    if (ch === "i") {
+   190→      // ri + ió → rió
+   191→      pret = pret.substring(0, start) + pret.substring(end);
+   192→    } else if (
+   193→      ch === "a" ||
+   194→      ch === "e" ||
+   195→      (ch === "u" && prev !== "q" && prev !== "g")
+   196→    ) {
+   197→      // ca + ió → cayó / hu + ieron → huyeron
+   198→      pret =
+   199→        pret.substring(0, pret.length - idx + 1) +
+   200→        "y" +
+   201→        pret.substring(pret.length - idx + 2);
+   202→    }
+   203→  }
+   204→  if (attr.specialForms.pret != null) {
+   205→    pret = attr.specialForms.pret[sujeto];
+   206→  }
+   207→  return pret;
+   208→}
+   209→
+   210→/**
+   211→ * Present subjunctive for any subject index (0-5; YO borrows the él form).
+   212→ * nosotros/vosotros "un-boot" the yo stem (í→i plus ie→e / i→e / ue→o for
+   213→ * non-ir verbs; ie→i / i→i / ue→u for -ir verbs, incl. the special
+   214→ * "adquir" stem), and -ar verbs get the orthographic c→qu / g→gu / z→c
+   215→ * change before the ending.
+   216→ */
+   217→function getPresSubj(stem: string, attr: VerbAttrs, sujeto: number): string {
+   218→  let presSubj: string;
+   219→  const opp = attr.endingType === AR ? 1 : 0;
+   220→  const suj = sujeto === YO ? 2 : sujeto;
+   221→  if (attr.specialForms.subj != null) {
+   222→    return attr.specialForms.subj[suj];
+   223→  }
+   224→  if (suj === NOSOTROS || suj === VOSOTROS) {
+   225→    presSubj = getYo(stem, attr);
+   226→    presSubj = presSubj.substring(0, presSubj.length - 1);
+   227→    if (attr.stemChangeType !== NO_SC || stem === "adquir") {
+   228→      // un-accent every "í" first (reír → ri)
+   229→      for (let i = 0; i < presSubj.length; i++) {
+   230→        if (presSubj.substring(i, i + 1) === "í") {
+   231→          presSubj = presSubj.substring(0, i) + "i" + presSubj.substring(i + 1);
+   232→        }
+   233→      }
+   234→      let find = "";
+   235→      let change = "";
+   236→      if (attr.endingType !== IR) {
+   237→        if (attr.stemChangeType === E_IE) {
+   238→          find = "ie";
+   239→          change = "e";
+   240→        } else if (attr.stemChangeType === E_I) {
+   241→          find = "i";
+   242→          change = "e";
+   243→        } else if (attr.stemChangeType === O_UE) {
+   244→          find = "ue";
+   245→          change = "o";
+   246→        }
+   247→      } else {
+   248→        if (attr.stemChangeType === E_IE) {
+   249→          find = "ie";
+   250→          change = "i";
+   251→        } else if (attr.stemChangeType === E_I) {
+   252→          find = "i";
+   253→          change = "i";
+   254→        } else if (attr.stemChangeType === O_UE) {
+   255→          find = "ue";
+   256→          change = "u";
+   257→        } else if (stem === "adquir") {
+   258→          find = "ie";
+   259→          change = "i";
+   260→        }
+   261→      }
+   262→      if (find !== "") {
+   263→        // replace the LAST occurrence of `find` (search runs from the end)
+   264→        for (let i = 0; i < presSubj.length - 1; i++) {
+   265→          const look = presSubj.substring(
+   266→            presSubj.length - i - find.length,
+   267→            presSubj.length - i
+   268→          );
+   269→          if (look === find) {
+   270→            presSubj =
+   271→              presSubj.substring(0, presSubj.length - i - find.length) +
+   272→              change +
+   273→              presSubj.substring(presSubj.length - i);
+   274→            break;
+   275→          }
+   276→        }
+   277→      }
+   278→    }
+   279→    presSubj += PRES_ENDINGS[opp][suj];
+   280→  } else {
+   281→    presSubj = getYo(stem, attr);
+   282→    presSubj =
+   283→      presSubj.substring(0, presSubj.length - 1) + PRES_ENDINGS[opp][suj];
+   284→  }
+   285→  if (attr.isReflexive) {
+   286→    presSubj = REFLEXIVE_PRONOUNS[sujeto] + " " + presSubj;
+   287→  }
+   288→  if (attr.endingType === AR) {
+   289→    const ending = PRES_ENDINGS[opp][suj];
+   290→    const inspect = presSubj.substring(
+   291→      presSubj.length - ending.length - 1,
+   292→      presSubj.length - ending.length
+   293→    );
+   294→    if (inspect === "c") {
+   295→      presSubj =
+   296→        presSubj.substring(0, presSubj.length - ending.length - 1) +
+   297→        "qu" +
+   298→        presSubj.substring(presSubj.length - ending.length);
+   299→    } else if (inspect === "g") {
+   300→      presSubj =
+   301→        presSubj.substring(0, presSubj.length - ending.length - 1) +
+   302→        "gu" +
+   303→        presSubj.substring(presSubj.length - ending.length);
+   304→    } else if (inspect === "z") {
+   305→      presSubj =
+   306→        presSubj.substring(0, presSubj.length - ending.length - 1) +
+   307→        "c" +
+   308→        presSubj.substring(presSubj.length - ending.length);
+   309→    }
+   310→  }
+   311→  return presSubj;
+   312→}
+   313→
+   314→// ── Core solution builder ────────────────────────────────────
+   315→
+   316→interface Solution {
+   317→  spanish: Record<RowKey, string[]>;
+   318→  english: Record<RowKey, string[]>;
+   319→}
+   320→
+   321→function buildSolution(verb: string, subject: SubjectKey): Solution {
+   322→  const attr = VERBS[verb];
+   323→  if (!attr) {
+   324→    throw new Error(`Unknown verb: ${verb}`);
+   325→  }
+   326→  if (!(subject in SUBJECT_INDEX)) {
+   327→    throw new Error(`Unknown subject: ${subject}`);
+   328→  }
+   329→  const sujeto = SUBJECT_INDEX[subject];
+   330→
+   331→  // reflexive infinitive without the trailing "se"
+   332→  const plainVerb = attr.isReflexive
+   333→    ? verb.substring(0, verb.length - 2)
+   334→    : verb;
+   335→  const stem = plainVerb.substring(0, plainVerb.length - 2);
+   336→  // imperfect/preterite ending table index: -ar → 0, -er/-ir → 1
+   337→  const sujIdx = attr.endingType === AR ? 0 : 1;
+   338→
+   339→  const raw = {} as Partial<Record<RowKey, string | string[]>>;
+   340→
+   341→  // ── infinitive ──
+   342→  let infin = plainVerb;
+   343→  if (attr.isReflexive) {
+   344→    infin += REFLEXIVE_PRONOUNS[sujeto];
+   345→  }
+   346→  raw.inf = infin;
+   347→
+   348→  // ── gerund ──
+   349→  let ger: string | string[];
+   350→  if (attr.specialForms.gerund == null) {
+   351→    let gerStem: string;
+   352→    if (attr.endingType === IR && attr.stemChangeType !== NO_SC) {
+   353→      gerStem = stemChange(stem, attr.stemChangeType, true);
+   354→    } else {
+   355→      gerStem = stem;
+   356→    }
+   357→    if (attr.endingType === AR) {
+   358→      ger = attr.isReflexive
+   359→        ? [
+   360→            gerStem + "ándo" + REFLEXIVE_PRONOUNS[sujeto],
+   361→            REFLEXIVE_PRONOUNS[sujeto] + " - " + gerStem + "ando",
+   362→          ]
+   363→        : gerStem + "ando";
+   364→    } else {
+   365→      ger = attr.isReflexive
+   366→        ? [
+   367→            gerStem + "iéndo" + REFLEXIVE_PRONOUNS[sujeto],
+   368→            REFLEXIVE_PRONOUNS[sujeto] + " - " + gerStem + "iendo",
+   369→          ]
+   370→        : gerStem + "iendo";
+   371→    }
+   372→  } else {
+   373→    ger = attr.specialForms.gerund;
+   374→  }
+   375→  raw.ger = ger;
+   376→
+   377→  // ── participle (single canonical form; the alternative participle is
+   378→  //    appended to every affected row in post-processing below) ──
+   379→  let part: string;
+   380→  if (attr.specialForms.participle == null) {
+   381→    part = attr.endingType === AR ? stem + "ado" : stem + "ido";
+   382→    if (attr.isReflexive) {
+   383→      part = REFLEXIVE_PRONOUNS[sujeto] + " - " + part;
+   384→    }
+   385→  } else {
+   386→    const p = attr.specialForms.participle;
+   387→    part = Array.isArray(p) ? p[0] : p;
+   388→  }
+   389→  raw.part = part;
+   390→
+   391→  // ── present ──
+   392→  let pres: string;
+   393→  if (attr.specialForms.pres != null) {
+   394→    pres = attr.specialForms.pres[sujeto];
+   395→  } else if (sujeto === NOSOTROS) {
+   396→    // -ir verbs whose stem ends in "e" keep the accent: reír → reímos
+   397→    if (attr.endingType === IR && stem.substring(stem.length - 1) === "e") {
+   398→      pres = stem + "ímos";
+   399→    } else {
+   400→      pres = stem + PRES_ENDINGS[attr.endingType][sujeto];
+   401→    }
+   402→  } else if (sujeto === YO) {
+   403→    pres = getYo(stem, attr);
+   404→  } else {
+   405→    const presStem =
+   406→      attr.specialForms.boot == null
+   407→        ? stemChange(stem, attr.stemChangeType, false)
+   408→        : attr.specialForms.boot;
+   409→    pres = presStem + PRES_ENDINGS[attr.endingType][sujeto];
+   410→  }
+   411→  if (attr.isReflexive) {
+   412→    pres = REFLEXIVE_PRONOUNS[sujeto] + " " + pres;
+   413→  }
+   414→  raw.pres = pres;
+   415→
+   416→  // ── imperfect ──
+   417→  let imp: string;
+   418→  if (attr.specialForms.imp != null) {
+   419→    imp = attr.specialForms.imp[sujeto];
+   420→  } else {
+   421→    imp = stem + IMP_ENDINGS[sujIdx][sujeto];
+   422→    if (attr.isReflexive) {
+   423→      imp = REFLEXIVE_PRONOUNS[sujeto] + " " + imp;
+   424→    }
+   425→  }
+   426→  raw.imp = imp;
+   427→
+   428→  // ── preterite ──
+   429→  let pret: string;
+   430→  if (sujeto === EL || sujeto === ELLOS) {
+   431→    pret = getEllos(stem, attr, sujeto);
+   432→    if (attr.isReflexive) {
+   433→      pret = "se " + pret;
+   434→    }
+   435→  } else {
+   436→    if (attr.specialForms.pret == null) {
+   437→      const lastStemChar = stem.substring(stem.length - 1);
+   438→      if (sujeto === YO && attr.endingType === AR) {
+   439→        // orthographic changes: c→qu, g→gu, z→c (comencé, llegué, forcé)
+   440→        if (lastStemChar === "z") {
+   441→          pret =
+   442→            stem.substring(0, stem.length - 1) +
+   443→            "c" +
+   444→            PRET_ENDINGS[sujIdx][sujeto];
+   445→        } else if (lastStemChar === "g") {
+   446→          pret =
+   447→            stem.substring(0, stem.length - 1) +
+   448→            "gu" +
+   449→            PRET_ENDINGS[sujIdx][sujeto];
+   450→        } else if (lastStemChar === "c") {
+   451→          pret =
+   452→            stem.substring(0, stem.length - 1) +
+   453→            "qu" +
+   454→            PRET_ENDINGS[sujIdx][sujeto];
+   455→        } else {
+   456→          pret = stem + PRET_ENDINGS[sujIdx][sujeto];
+   457→        }
+   458→      } else if (
+   459→        (sujIdx === 1 && lastStemChar === "e") ||
+   460→        lastStemChar === "a"
+   461→      ) {
+   462→        // caer/creer/leer… keep the accent on the "i": caíste, creí
+   463→        let ending = PRET_ENDINGS[sujIdx][sujeto];
+   464→        ending = "í" + ending.substring(1);
+   465→        pret = stem + ending;
+   466→      } else {
+   467→        pret = stem + PRET_ENDINGS[sujIdx][sujeto];
+   468→      }
+   469→    } else {
+   470→      pret = attr.specialForms.pret[sujeto];
+   471→    }
+   472→    if (attr.isReflexive) {
+   473→      pret = REFLEXIVE_PRONOUNS[sujeto] + " " + pret;
+   474→    }
+   475→  }
+   476→  raw.pret = pret;
+   477→
+   478→  // ── future & conditional (both share the special future stem) ──
+   479→  const futStem = attr.specialForms.future ?? plainVerb;
+   480→  let fut = futStem + FUT_ENDINGS[sujeto];
+   481→  if (attr.isReflexive) {
+   482→    fut = REFLEXIVE_PRONOUNS[sujeto] + " " + fut;
+   483→  }
+   484→  raw.fut = fut;
+   485→
+   486→  let cond = futStem + IMP_ENDINGS[1][sujeto];
+   487→  if (attr.isReflexive) {
+   488→    cond = REFLEXIVE_PRONOUNS[sujeto] + " " + cond;
+   489→  }
+   490→  raw.cond = cond;
+   491→
+   492→  // ── compound tenses ──
+   493→  // For reflexive verbs the participle carries the pronoun as "me - hablado";
+   494→  // swapping the dash for the haber form yields "me he hablado", etc.
+   495→  raw.pres_perf = attr.isReflexive
+   496→    ? part.replace("-", HABER_PRES[sujeto])
+   497→    : HABER_PRES[sujeto] + " " + part;
+   498→  raw.plu_perf = attr.isReflexive
+   499→    ? part.replace("-", "hab" + IMP_ENDINGS[1][sujeto])
+   500→    : "hab" + IMP_ENDINGS[1][sujeto] + " " + part;
+   501→  raw.fut_perf = attr.isReflexive
+   502→    ? part.replace("-", "habr" + FUT_ENDINGS[sujeto])
+   503→    : "habr" + FUT_ENDINGS[sujeto] + " " + part;
+   504→  raw.cond_perf = attr.isReflexive
+   505→    ? part.replace("-", "habr" + IMP_ENDINGS[1][sujeto])
+   506→    : "habr" + IMP_ENDINGS[1][sujeto] + " " + part;
+   507→
+   508→  // ── present subjunctive ──
+   509→  raw.pres_subj = getPresSubj(stem, attr, sujeto);
+   510→
+   511→  // ── imperfect subjunctive (built on the 3rd person plural preterite) ──
+   512→  let impSubj = getEllos(stem, attr, ELLOS);
+   513→  impSubj = impSubj.substring(0, impSubj.length - 3);
+   514→  if (attr.isReflexive) {
+   515→    impSubj = REFLEXIVE_PRONOUNS[sujeto] + " " + impSubj;
+   516→  }
+   517→  if (sujeto === NOSOTROS) {
+   518→    // legacy accent hack: accent the stem's last vowel, then drop the
+   519→    // trailing space that lured addAccent past the stem ("tuvié " → "tuvié")
+   520→    impSubj = addAccent(impSubj + " ").substring(0, impSubj.length);
+   521→  }
+   522→  raw.imp_subj = [
+   523→    impSubj + IMP_SUBJ_ENDINGS[0][sujeto],
+   524→    impSubj + IMP_SUBJ_ENDINGS[1][sujeto],
+   525→  ];
+   526→
+   527→  raw.pres_perf_subj = attr.isReflexive
+   528→    ? part.replace("-", HABER_SUBJ[sujeto])
+   529→    : HABER_SUBJ[sujeto] + " " + part;
+   530→
+   531→  raw.plu_perf_subj = attr.isReflexive
+   532→    ? [
+   533→        part.replace("-", HABER_IMP_SUBJ[0][sujeto]),
+   534→        part.replace("-", HABER_IMP_SUBJ[1][sujeto]),
+   535→      ]
+   536→    : [
+   537→        HABER_IMP_SUBJ[0][sujeto] + " " + part,
+   538→        HABER_IMP_SUBJ[1][sujeto] + " " + part,
+   539→      ];
+   540→
+   541→  // ── tú affirmative command ──
+   542→  let tup: string;
+   543→  if (attr.specialForms.command != null) {
+   544→    tup = attr.specialForms.command;
+   545→  } else if (attr.specialForms.pres != null) {
+   546→    tup = attr.specialForms.pres[2];
+   547→  } else {
+   548→    tup =
+   549→      attr.specialForms.boot == null
+   550→        ? stemChange(stem, attr.stemChangeType, false)
+   551→        : attr.specialForms.boot;
+   552→    if (attr.isReflexive) {
+   553→      // siéntate / vístete / pórtate
+   554→      tup = addAccent(tup);
+   555→      tup += PRES_ENDINGS[attr.endingType][2] + REFLEXIVE_PRONOUNS[1];
+   556→    } else {
+   557→      tup += PRES_ENDINGS[attr.endingType][2];
+   558→    }
+   559→  }
+   560→  raw.tu_pos = [tup, "¡" + tup + "!"];
+   561→
+   562→  // ── tú negative command ──
+   563→  const tun = "no " + getPresSubj(stem, attr, TU);
+   564→  raw.tu_neg = [tun, "¡" + tun + "!"];
+   565→
+   566→  // ── usted command (reflexives relocate the pronoun: "se sienta" → "siéntese") ──
+   567→  let baseUd = getPresSubj(stem, attr, EL);
+   568→  if (attr.isReflexive) {
+   569→    const lastChar = baseUd.substring(baseUd.length - 1);
+   570→    baseUd = baseUd.substring(3, baseUd.length - 1);
+   571→    baseUd = addAccent(baseUd) + lastChar + "se";
+   572→  }
+   573→  raw.ud = [baseUd, "¡" + baseUd + "!"];
+   574→
+   575→  // ── ustedes command ("se sientan" → "síentense") ──
+   576→  let baseUds = getPresSubj(stem, attr, ELLOS);
+   577→  if (attr.isReflexive) {
+   578→    const lastTwo = baseUds.substring(baseUds.length - 2);
+   579→    baseUds = baseUds.substring(3, baseUds.length - 2);
+   580→    baseUds = addAccent(baseUds) + lastTwo + "se";
+   581→  }
+   582→  raw.uds = [baseUds, "¡" + baseUds + "!"];
+   583→
+   584→  // ── vosotros commands ──
+   585→  // negative: no + present subjunctive (vosotros form)
+   586→  const vosn = "no " + getPresSubj(stem, attr, VOSOTROS);
+   587→  // affirmative: infinitive minus last letter + "d" (hablar → hablad)
+   588→  let vosp = plainVerb.substring(0, plainVerb.length - 1) + "d";
+   589→  if (attr.isReflexive) {
+   590→    if (attr.endingType === IR) {
+   591→      vosp = vosp.substring(0, vosp.length - 2) + "íos"; // vestíos
+   592→    } else {
+   593→      vosp = vosp.substring(0, vosp.length - 1) + "os"; // sentaos
+   594→    }
+   595→  }
+   596→  raw.vos_pos = [vosp, "¡" + vosp + "!"];
+   597→  raw.vos_neg = [vosn, "¡" + vosn + "!"];
+   598→
+   599→  // ── nosotros command ──
+   600→  let nosCmd: string;
+   601→  if (attr.specialForms.nos != null) {
+   602→    nosCmd = attr.specialForms.nos;
+   603→  } else {
+   604→    nosCmd = getPresSubj(stem, attr, NOSOTROS);
+   605→    if (attr.isReflexive) {
+   606→      // "nos sentemos" → strip pronoun + ending, then ámonos/émonos
+   607→      nosCmd = nosCmd.substring(4, nosCmd.length - 3);
+   608→      const lastChar = nosCmd.substring(nosCmd.length - 1);
+   609→      if (lastChar === "a") {
+   610→        nosCmd = nosCmd.substring(0, nosCmd.length - 1) + "ámonos";
+   611→      } else if (lastChar === "e") {
+   612→        nosCmd = nosCmd.substring(0, nosCmd.length - 1) + "émonos";
+   613→      }
+   614→    }
+   615→  }
+   616→  raw.nos = [nosCmd, "¡" + nosCmd + "!"];
+   617→
+   618→  // ── normalize to arrays + append the alternative participle
+   619→  //    (freír: frito / freído) everywhere it appears ──
+   620→  const altParticiple =
+   621→    attr.specialForms.participle != null &&
+   622→    Array.isArray(attr.specialForms.participle)
+   623→      ? attr.specialForms.participle
+   624→      : null;
+   625→
+   626→  const spanish = {} as Record<RowKey, string[]>;
+   627→  for (const meta of TENSE_ROWS) {
+   628→    const value = raw[meta.key];
+   629→    if (value === undefined) {
+   630→      throw new Error(`Engine bug: row "${meta.key}" was not built for ${verb}`);
+   631→    }
+   632→    const arr = Array.isArray(value) ? [...value] : [value];
+   633→    if (altParticiple) {
+   634→      const [primary, alt] = altParticiple;
+   635→      const fixed = arr.length; // original iterated while pushing; snapshot is equivalent for our data
+   636→      for (let j = 0; j < fixed; j++) {
+   637→        if (arr[j].includes(primary)) {
+   638→          arr.push(arr[j].replace(primary, alt));
+   639→        }
+   640→      }
+   641→    }
+   642→    spanish[meta.key] = dedup(arr);
+   643→  }
+   644→
+   645→  // ── English (replaces the legacy RegExp templates with plain strings;
+   646→  //    every translation set contributes its variants to every row) ──
+   647→  const english = {} as Record<RowKey, string[]>;
+   648→  for (const meta of TENSE_ROWS) {
+   649→    english[meta.key] = [];
+   650→  }
+   651→
+   652→  const sub = E_SUBS[sujeto];
+   653→
+   654→  for (const set of attr.english) {
+   655→    const inf = set.inf;
+   656→    const gerEn = set.ger;
+   657→    const partEn = set.part;
+   658→    const pretEn = set.pret;
+   659→    const impSubjEn = set.impSubj ?? null;
+   660→
+   661→    const be = inf === "be" || inf === "be worth";
+   662→    const go = inf === "go" || inf === "go to bed";
+   663→    const have = inf === "have" || inf === "have fun";
+   664→    const space = !be && !go && !have && inf.indexOf(" ") !== -1;
+   665→
+   666→    english.inf.push("to " + inf);
+   667→    english.ger.push(gerEn);
+   668→    english.part.push(partEn);
+   669→
+   670→    // present — he/she agreement
+   671→    if (go) {
+   672→      if (sujeto === EL) {
+   673→        english.pres.push(`${sub} goes${inf.substring(2)}`);
+   674→      } else {
+   675→        english.pres.push(`${sub} ${inf}`);
+   676→      }
+   677→    } else if (have) {
+   678→      if (sujeto === EL) {
+   679→        english.pres.push(`${sub} has${inf.substring(4)}`);
+   680→      } else {
+   681→        english.pres.push(`${sub} ${inf}`);
+   682→      }
+   683→    } else if (space) {
+   684→      if (sujeto === EL) {
+   685→        const sp = inf.indexOf(" ");
+   686→        english.pres.push(
+   687→          `${sub} ${inf.substring(0, sp)}s${inf.substring(sp)}`
+   688→        );
+   689→      } else {
+   690→        english.pres.push(`${sub} ${inf}`);
+   691→      }
+   692→    } else if (sujeto === YO && be) {
+   693→      english.pres.push(`${sub} am${inf.substring(2)}`);
+   694→    } else if (sujeto === EL) {
+   695→      english.pres.push(
+   696→        be ? `${sub} is${inf.substring(2)}` : `${sub} ${inf}s`
+   697→      );
+   698→    } else if (be && (sujeto === TU || sujeto === NOSOTROS || sujeto === ELLOS)) {
+   699→      english.pres.push(`${sub} are${inf.substring(2)}`);
+   700→    } else {
+   701→      english.pres.push(`${sub} ${inf}`);
+   702→    }
+   703→
+   704→    // imperfect
+   705→    english.imp.push(`${sub} used to ${inf}`);
+   706→    if (!be) {
+   707→      english.imp.push(
+   708→        sujeto === YO || sujeto === EL
+   709→          ? `${sub} was ${gerEn}`
+   710→          : `${sub} were ${gerEn}`
+   711→      );
+   712→    }
+   713→
+   714→    // preterite
+   715→    if (be && (sujeto === TU || sujeto === NOSOTROS || sujeto === ELLOS)) {
+   716→      english.pret.push(`${sub} were${inf.substring(2)}`);
+   717→    } else {
+   718→      english.pret.push(`${sub} ${pretEn}`);
+   719→    }
+   720→
+   721→    // perfects
+   722→    english.pres_perf.push(
+   723→      sujeto === EL ? `${sub} has ${partEn}` : `${sub} have ${partEn}`
+   724→    );
+   725→    english.plu_perf.push(`${sub} had ${partEn}`);
+   726→    english.fut.push(`${sub} will ${inf}`);
+   727→    english.fut_perf.push(`${sub} will have ${partEn}`);
+   728→    english.cond.push(`${sub} would ${inf}`);
+   729→    english.cond_perf.push(`${sub} would have ${partEn}`);
+   730→    english.cond_perf.push(`${sub} would've ${partEn}`);
+   731→
+   732→    // subjunctives
+   733→    english.pres_subj.push(`that ${sub} ${inf}`);
+   734→    if (!be) {
+   735→      english.imp_subj.push(`that ${sub} were ${gerEn}`);
+   736→    }
+   737→    english.imp_subj.push(
+   738→      `that ${sub} ${impSubjEn != null ? impSubjEn : pretEn}`
+   739→    );
+   740→    english.pres_perf_subj.push(`that ${sub} have ${partEn}`);
+   741→    english.plu_perf_subj.push(`that ${sub} had ${partEn}`);
+   742→
+   743→    // commands
+   744→    english.tu_pos.push(inf, `${inf}!`);
+   745→    english.tu_neg.push(`don't ${inf}`, `don't ${inf}!`);
+   746→    english.ud.push(inf, `${inf}!`);
+   747→    english.uds.push(inf, `${inf}!`);
+   748→    english.vos_pos.push(
+   749→      `(you all) ${inf}`,
+   750→      `(you all) ${inf}!`,
+   751→      inf,
+   752→      `${inf}!`
+   753→    );
+   754→    english.vos_neg.push(
+   755→      `(you all) don't ${inf}`,
+   756→      `(you all) don't ${inf}!`,
+   757→      `don't ${inf}`,
+   758→      `don't ${inf}!`
+   759→    );
+   760→    english.nos.push(`let's ${inf}`, `let's ${inf}!`);
+   761→  }
+   762→
+   763→  for (const meta of TENSE_ROWS) {
+   764→    english[meta.key] = dedup(english[meta.key]);
+   765→  }
+   766→
+   767→  return { spanish, english };
+   768→}
+   769→
+   770→// ── Public API ───────────────────────────────────────────────
+   771→
+   772→/**
+   773→ * All 23 conjugation rows for a verb + subject, in TENSE_ROWS order.
+   774→ * Throws for unknown verbs/subjects.
+   775→ */
+   776→export function conjugate(verb: string, subject: SubjectKey): ConjugationRow[] {
+   777→  const { spanish, english } = buildSolution(verb, subject);
+   778→  return TENSE_ROWS.map((meta) => ({
+   779→    key: meta.key,
+   780→    group: meta.group,
+   781→    labelEs: meta.labelEs,
+   782→    labelEn: meta.labelEn,
+   783→    spanish: spanish[meta.key],
+   784→    english: english[meta.key],
+   785→  }));
+   786→}
+   787→
+   788→/**
+   789→ * A single row (all accepted Spanish + English answers).
+   790→ * Throws for unknown verbs/subjects/tenses.
+   791→ */
+   792→export function conjugateOne(
+   793→  verb: string,
+   794→  subject: SubjectKey,
+   795→  tense: RowKey
+   796→): { spanish: string[]; english: string[] } {
+   797→  const meta = ROW_META[tense];
+   798→  if (!meta) {
+   799→    throw new Error(`Unknown tense: ${tense}`);
+   800→  }
+   801→  const { spanish, english } = buildSolution(verb, subject);
+   802→  return { spanish: spanish[tense], english: english[tense] };
+   803→}
+   804→

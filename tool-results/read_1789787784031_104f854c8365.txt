@@ -1,0 +1,705 @@
+     1→// Main logic that constructs a solution for each box and then displays it 
+     2→// based on current selected verb and for the specified subject
+     3→
+     4→function getSolution(sujeto) {
+     5→    let verbo = document.getElementById("verbSelector").value;
+     6→    let attr = getAttributes(verbo); //Guiding attributes for the verb
+     7→    let plain_verb;
+     8→
+     9→    if(attr.isReflexive) {
+    10→        plain_verb = verbo.substring(0, verbo.length - 2);
+    11→    } else {
+    12→        plain_verb = verbo;
+    13→    }
+    14→    var stem = plain_verb.substring(0, plain_verb.length - 2);
+    15→
+    16→    var spanish = [];
+    17→
+    18→    //infinitive
+    19→    var infin = plain_verb;
+    20→    if(attr.isReflexive) {
+    21→        infin += reflexive_pronouns[sujeto];
+    22→    }
+    23→    spanish.push(infin);
+    24→
+    25→    //gerund
+    26→    var ger;
+    27→    if(attr.specialForms["gerund"] == null) {
+    28→        if(attr.endingType == IR && attr.stemChangeType != NO_SC) {
+    29→            ger = stemChange(stem, attr.stemChangeType, true);
+    30→        } else {
+    31→            ger = stem;
+    32→        }
+    33→        if(attr.endingType == AR) {
+    34→            if(attr.isReflexive) {
+    35→                ger = [ger + "ándo" + reflexive_pronouns[sujeto], reflexive_pronouns[sujeto] + " - " + ger + "ando"];
+    36→            } else {
+    37→                ger += "ando";
+    38→            }
+    39→        } else {
+    40→            if(attr.isReflexive) {
+    41→                ger = [ger + "iéndo" + reflexive_pronouns[sujeto], reflexive_pronouns[sujeto] + " - " + ger + "iendo"];
+    42→            } else {
+    43→                ger += "iendo";
+    44→            }
+    45→        }
+    46→    } else {
+    47→        ger = attr.specialForms["gerund"];
+    48→    }
+    49→    spanish.push(ger);
+    50→
+    51→    //participle
+    52→    var part;
+    53→    if(attr.specialForms["participle"] == null) {
+    54→        if(attr.endingType == AR) {
+    55→            part = stem + "ado";
+    56→        } else {
+    57→            part = stem + "ido";
+    58→        }
+    59→        if(attr.isReflexive) {
+    60→            part = reflexive_pronouns[sujeto] + " - " + part;
+    61→        }
+    62→    } else {
+    63→        part = attr.specialForms["participle"];
+    64→        if(part instanceof Array) {
+    65→            part = part[0];
+    66→        }
+    67→    }
+    68→    spanish.push(part);
+    69→
+    70→    //present
+    71→    var pres;
+    72→    if(attr.specialForms["pres"] != null) {
+    73→        pres = attr.specialForms["pres"][sujeto];
+    74→    }
+    75→    else { 
+    76→        if(sujeto == NOSOTROS) {
+    77→            if(attr.endingType == IR && stem.substring(stem.length - 1) == "e") {
+    78→                pres = stem + "ímos";
+    79→            } else {
+    80→                pres = stem + pres_endings[attr.endingType][sujeto];
+    81→            }
+    82→        } else if(sujeto == YO) {
+    83→            pres = getYo(stem, attr);
+    84→        }else {
+    85→            if(attr.specialForms["boot"] == null) {
+    86→                pres = stemChange(stem, attr.stemChangeType, false) + pres_endings[attr.endingType][sujeto];    
+    87→            } else {
+    88→                pres = attr.specialForms["boot"] + pres_endings[attr.endingType][sujeto];
+    89→            }
+    90→        }
+    91→    }
+    92→    if(attr.isReflexive) {
+    93→        pres = reflexive_pronouns[sujeto] + " " + pres;
+    94→    }
+    95→    spanish.push(pres);
+    96→
+    97→    //imperfect
+    98→    var imp;
+    99→    if(attr.specialForms["imp"] != null) {
+   100→        imp = attr.specialForms["imp"][sujeto];
+   101→    } else {
+   102→        var suj_idx = attr.endingType == AR? 0:1;
+   103→        imp = stem + imp_endings[suj_idx][sujeto];
+   104→        if(attr.isReflexive) {
+   105→            imp = reflexive_pronouns[sujeto] +" "+ imp;
+   106→        }
+   107→    }
+   108→    spanish.push(imp);
+   109→
+   110→    //pret
+   111→    var pret;
+   112→    if(sujeto == EL || sujeto == ELLOS) {
+   113→        pret = getEllos(stem, attr, sujeto);
+   114→        if(attr.isReflexive) {
+   115→            pret = "se " + pret;
+   116→        }
+   117→    } else {
+   118→        if(attr.specialForms["pret"] == null) {
+   119→            if(sujeto == YO && attr.endingType == AR) {
+   120→                if(stem.substring(stem.length - 1) == "z") {
+   121→                    pret = stem.substring(0, stem.length - 1) + "c" + pret_endings[suj_idx][sujeto];
+   122→                } else if(stem.substring(stem.length - 1) == "g") {
+   123→                    pret = stem.substring(0, stem.length - 1) + "gu" + pret_endings[suj_idx][sujeto];
+   124→                } else if(stem.substring(stem.length - 1) == "c") {
+   125→                    pret = stem.substring(0, stem.length - 1) + "qu" + pret_endings[suj_idx][sujeto];
+   126→                } else {
+   127→                    pret = stem + pret_endings[suj_idx][sujeto];
+   128→                }
+   129→            } else if(suj_idx == 1 && (stem.substring(stem.length - 1) == "e") || stem.substring(stem.length - 1) == "a") {
+   130→                var ending = pret_endings[suj_idx][sujeto];
+   131→                ending = "í" + ending.substring(1);
+   132→                pret = stem + ending;
+   133→            } else {
+   134→                pret = stem + pret_endings[suj_idx][sujeto];
+   135→            }
+   136→        } else {
+   137→            pret = attr.specialForms["pret"][sujeto];
+   138→        }
+   139→        if(attr.isReflexive) {
+   140→            pret = reflexive_pronouns[sujeto] +" "+ pret;
+   141→        }
+   142→    }
+   143→    spanish.push(pret);
+   144→
+   145→    //present perfect
+   146→    if(attr.isReflexive) {
+   147→        spanish.push(part.replace("-", haber_pres[sujeto]));
+   148→    } else {
+   149→        spanish.push(haber_pres[sujeto] + " " + part);
+   150→    }
+   151→
+   152→    //pluperfect
+   153→    if(attr.isReflexive) {
+   154→        spanish.push(part.replace("-", "hab" + imp_endings[1][sujeto]));
+   155→    } else {
+   156→        spanish.push("hab" + imp_endings[1][sujeto] + " " + part);
+   157→    }
+   158→
+   159→    //future
+   160→    var fut;
+   161→    if(attr.specialForms["future"] == null) {
+   162→        fut = plain_verb + fut_endings[sujeto];
+   163→    } else {
+   164→        fut = attr.specialForms["future"] + fut_endings[sujeto];
+   165→    }
+   166→    if(attr.isReflexive) {
+   167→        fut = reflexive_pronouns[sujeto] + " " + fut;
+   168→    }
+   169→    spanish.push(fut);
+   170→
+   171→    //fut perf
+   172→    if(attr.isReflexive) {
+   173→        spanish.push(part.replace("-", "habr" + fut_endings[sujeto]));
+   174→    } else {
+   175→        spanish.push("habr" + fut_endings[sujeto] + " " + part);
+   176→    }
+   177→
+   178→    //cond
+   179→    var cond;
+   180→    if(attr.specialForms["future"] == null) {
+   181→        cond = plain_verb + imp_endings[1][sujeto];
+   182→    } else {
+   183→        cond = attr.specialForms["future"] + imp_endings[1][sujeto];
+   184→    }
+   185→    if(attr.isReflexive) {
+   186→        cond = reflexive_pronouns[sujeto] + " " + cond;
+   187→    }
+   188→    spanish.push(cond);
+   189→
+   190→    //cond perf
+   191→    if(attr.isReflexive) {
+   192→        spanish.push(part.replace("-", "habr" + imp_endings[1][sujeto]));
+   193→    } else {
+   194→        spanish.push("habr" + imp_endings[1][sujeto] + " " + part);
+   195→    }
+   196→
+   197→    //pres subj
+   198→    spanish.push(getPresSubj(stem, attr, sujeto));
+   199→
+   200→    //imp subj
+   201→    var imp_subj = getEllos(stem, attr, ELLOS);
+   202→    imp_subj = imp_subj.substring(0, imp_subj.length - 3);
+   203→    if(attr.isReflexive) {
+   204→        imp_subj = reflexive_pronouns[sujeto] + " " + imp_subj;
+   205→    }
+   206→    if(sujeto == NOSOTROS) {
+   207→        imp_subj = addAccent(imp_subj + " ").substring(0, imp_subj.length);
+   208→    }
+   209→    spanish.push([imp_subj + imp_subj_endings[0][sujeto], imp_subj + imp_subj_endings[1][sujeto]]);
+   210→
+   211→    //pres. perf subj
+   212→    if(attr.isReflexive) {
+   213→        spanish.push(part.replace("-", haber_subj[sujeto]));
+   214→    } else {
+   215→        spanish.push(haber_subj[sujeto] + " " + part);
+   216→    }
+   217→
+   218→    //pluperf subj
+   219→    if(attr.isReflexive) {
+   220→        spanish.push([part.replace("-", haber_imp_subj[0][sujeto]), part.replace("-", haber_imp_subj[1][sujeto])]);
+   221→    } else {
+   222→        spanish.push([haber_imp_subj[0][sujeto] + " " + part, haber_imp_subj[1][sujeto] + " " + part]);
+   223→    }
+   224→
+   225→    // Tu +
+   226→    var tup;
+   227→    if(attr.specialForms["command"] != null) {
+   228→        tup = attr.specialForms["command"];
+   229→    }
+   230→    else if(attr.specialForms["pres"] != null) {
+   231→        tup = attr.specialForms["pres"][2];
+   232→    }
+   233→    else {
+   234→        if(attr.specialForms["boot"] == null) {
+   235→            tup = stemChange(stem, attr.stemChangeType, false);    
+   236→        } else {
+   237→            tup = attr.specialForms["boot"];
+   238→        }
+   239→        if(attr.isReflexive) {
+   240→            tup = addAccent(tup);
+   241→            tup += pres_endings[attr.endingType][2] + reflexive_pronouns[1];
+   242→        } else {
+   243→            tup += pres_endings[attr.endingType][2];
+   244→        }
+   245→    }
+   246→    spanish.push([tup, "¡" + tup + "!"]);
+   247→
+   248→    //tun
+   249→    spanish.push(["no " + getPresSubj(stem, attr, 1), "¡" + "no " + getPresSubj(stem, attr, 1) + "!"]);
+   250→
+   251→    //ud
+   252→    var base_ud = getPresSubj(stem, attr, 2);
+   253→    if(attr.isReflexive) {
+   254→        var temp = base_ud.substring(base_ud.length - 1);
+   255→        base_ud = base_ud.substring(3, base_ud.length - 1);
+   256→        base_ud = addAccent(base_ud) + temp + "se";
+   257→    }
+   258→    spanish.push([base_ud, "¡" + base_ud + "!"]);
+   259→
+   260→    //uds
+   261→    var base_uds = getPresSubj(stem, attr, 4);
+   262→    if(attr.isReflexive) {
+   263→        var temp = base_uds.substring(base_uds.length - 2);
+   264→        base_uds = base_uds.substring(3, base_uds.length - 2);
+   265→        base_uds = addAccent(base_uds) + temp + "se";
+   266→    }
+   267→    spanish.push([base_uds, "¡" + base_uds + "!"]);
+   268→
+   269→    //vosotros
+   270→    var vosn = "no " + getPresSubj(stem, attr, 5);
+   271→    var vosp = plain_verb.substring(0, plain_verb.length - 1) + "d";
+   272→    if(attr.isReflexive) {
+   273→        if(attr.endingType == IR) {
+   274→            vosp = vosp.substring(0, vosp.length - 2) + "íos";
+   275→        } else {
+   276→            vosp = vosp.substring(0, vosp.length - 1) + "os";
+   277→        }
+   278→    }
+   279→    spanish.push([vosn, vosp, "¡" + vosn + "!", "¡" + vosp + "!"]);
+   280→    spanish.push([vosp, vosn, "¡" + vosp + "!", "¡" + vosn + "!"]);
+   281→
+   282→    //nosotros
+   283→    var nosotros;
+   284→    if(attr.specialForms["nos"] != null) {
+   285→        nosotros = attr.specialForms["nos"];
+   286→    } else {
+   287→        nosotros = getPresSubj(stem, attr, 3);
+   288→        if(attr.isReflexive) {
+   289→            nosotros = nosotros.substring(4, nosotros.length - 3);
+   290→            if(nosotros.substring(nosotros.length - 1) == "a") {
+   291→                nosotros = nosotros.substring(0, nosotros.length - 1) + "ámonos";
+   292→            } else if(nosotros.substring(nosotros.length - 1) == "e") {
+   293→                nosotros = nosotros.substring(0, nosotros.length - 1) + "émonos";
+   294→            }
+   295→        }
+   296→    }
+   297→    spanish.push([nosotros, "¡" + nosotros + "!"]);
+   298→    
+   299→    for(var i = 0; i < spanish.length; i++) {
+   300→        var obj = spanish[i];
+   301→        if(!(obj instanceof Array)) {
+   302→            obj = [obj];
+   303→        }
+   304→        if(attr.specialForms["participle"] != null && attr.specialForms["participle"] instanceof Array) {
+   305→            for(var j = 0; j < obj.length; j++) {
+   306→                if(obj[j].includes(attr.specialForms["participle"][0])) {
+   307→                    obj.push(obj[j].replace(attr.specialForms["participle"][0], attr.specialForms["participle"][1]));
+   308→                }
+   309→            }
+   310→        }
+   311→        spanish[i] = obj;
+   312→    }
+   313→
+   314→    //Then construct the english
+   315→    var english = [];
+   316→    for(var i = 0; i < 23; i++) {
+   317→        english.push([]);
+   318→    }
+   319→    for(var i = 0; i < attr.english.length; i++) {
+   320→        var curr_ops = attr.english[i];
+   321→        var be = false;
+   322→        var go = false;
+   323→        var have = false;
+   324→        var space = false;
+   325→        if(curr_ops[0] == "be worth" || curr_ops[0] == "be") {
+   326→            be = true;
+   327→        } else if(curr_ops[0] == "go to bed" || curr_ops[0] == "go") {
+   328→            go = true;
+   329→        } else if(curr_ops[0] == "have" || curr_ops[0] == "have fun") {
+   330→            have = true;
+   331→        } else if(curr_ops[0].indexOf(" ") != -1) {
+   332→            space = true;
+   333→        }
+   334→        english[0].push(new RegExp("^" + "to " + curr_ops[0] + "$"));
+   335→        english[1].push(new RegExp("^" + curr_ops[1] + "$"));
+   336→        english[2].push(new RegExp("^" + curr_ops[2] + "$"));
+   337→        if(go) {
+   338→            if(sujeto == EL) {
+   339→                english[3].push(new RegExp("^" + e_subs[sujeto] + " goes" + curr_ops[0].substring(2) + "$"));
+   340→            } else {
+   341→                english[3].push(new RegExp("^" + e_subs[sujeto] + " " + curr_ops[0] + "$"));
+   342→            }
+   343→        } else if(have) {
+   344→            if(sujeto == EL) {
+   345→                english[3].push(new RegExp("^" + e_subs[sujeto] + " has" + curr_ops[0].substring(4) + "$"));
+   346→            } else {
+   347→                english[3].push(new RegExp("^" + e_subs[sujeto] + " " + curr_ops[0] + "$"));
+   348→            }
+   349→        } else if(space) {
+   350→            if(sujeto == EL) {
+   351→                english[3].push(new RegExp("^" + e_subs[sujeto] + " " + curr_ops[0].substring(0, curr_ops[0].indexOf(" ")) + "s" + curr_ops[0].substring(curr_ops[0].indexOf(" ")) + "$"));
+   352→            } else {
+   353→                english[3].push(new RegExp("^" + e_subs[sujeto] + " " + curr_ops[0] + "$"));
+   354→            }
+   355→        } else {
+   356→            if(sujeto == YO && be) {
+   357→                english[3].push(new RegExp("^" + e_subs[sujeto] + " am" + curr_ops[0].substring(2) + "$"));
+   358→            } else if(sujeto == EL) {
+   359→                if(be) {
+   360→                    english[3].push(new RegExp("^" + e_subs[sujeto] + " is" + curr_ops[0].substring(2) + "$"));
+   361→                } else {
+   362→                    english[3].push(new RegExp("^" + e_subs[sujeto] + " " + curr_ops[0] + "s" + "$"));
+   363→                }
+   364→            } else if(be && (sujeto == TU || sujeto == NOSOTROS || sujeto == ELLOS)) {
+   365→                english[3].push(new RegExp("^" + e_subs[sujeto] + " are" + curr_ops[0].substring(2) + "$"));
+   366→            } else {
+   367→                english[3].push(new RegExp("^" + e_subs[sujeto] + " " + curr_ops[0] + "$"));
+   368→            }
+   369→        }
+   370→        
+   371→        english[4].push(new RegExp("^" + e_subs[sujeto] + " used to " + curr_ops[0] + "$"));
+   372→        if(!be) {    
+   373→            if(sujeto == YO || sujeto == EL) {
+   374→                english[4].push(new RegExp("^" + e_subs[sujeto] + " was " + curr_ops[1] + "$"));
+   375→            } else {
+   376→                english[4].push(new RegExp("^" + e_subs[sujeto] + " were " + curr_ops[1] + "$"));
+   377→            }
+   378→        }
+   379→        if(be && (sujeto == TU || sujeto == NOSOTROS || sujeto == ELLOS)) {
+   380→            english[5].push(new RegExp("^" + e_subs[sujeto] + " were" + curr_ops[0].substring(2) + "$"))
+   381→        } else {
+   382→            english[5].push(new RegExp("^" + e_subs[sujeto] + " " + curr_ops[3] + "$"));
+   383→        }
+   384→        if(sujeto != EL) {
+   385→            english[6].push(new RegExp("^" + e_subs[sujeto] + " have " + curr_ops[2] + "$"));
+   386→        } else {
+   387→            english[6].push(new RegExp("^" + e_subs[sujeto] + " has " + curr_ops[2] + "$"));
+   388→        }
+   389→        english[7].push(new RegExp("^" + e_subs[sujeto] + " had " + curr_ops[2] + "$"));
+   390→        english[8].push(new RegExp("^" + e_subs[sujeto] + " will " + curr_ops[0] + "$"));
+   391→        english[9].push(new RegExp("^" + e_subs[sujeto] + " will have " + curr_ops[2] + "$"));
+   392→        english[10].push(new RegExp("^" + e_subs[sujeto] + " would " + curr_ops[0] + "$"));
+   393→        english[11].push(new RegExp("^" + e_subs[sujeto] + " would have " + curr_ops[2] + "$"));
+   394→        english[11].push(new RegExp("^" + e_subs[sujeto] + " would.ve " + curr_ops[2] + "$"));
+   395→        english[12].push(new RegExp("^" + "that " + e_subs[sujeto] + " " + curr_ops[0] + "$"));
+   396→        if(!be) {
+   397→            english[13].push(new RegExp("^" + "that " + e_subs[sujeto] + " were " + curr_ops[1] + "$"));
+   398→        }
+   399→        if(curr_ops[4] != null) {
+   400→            english[13].push(new RegExp("^" + "that " + e_subs[sujeto] + " " + curr_ops[4] + "$"));
+   401→        } else {
+   402→            english[13].push(new RegExp("^" + "that " + e_subs[sujeto] + " " + curr_ops[3] + "$"))
+   403→        }
+   404→        english[14].push(new RegExp("^" + "that " + e_subs[sujeto] + " have " + curr_ops[2] + "$"));
+   405→        english[15].push(new RegExp("^" + "that " + e_subs[sujeto] + " had " + curr_ops[2] + "$"));
+   406→        english[16].push(new RegExp("^" + curr_ops[0] + "!?" + "$"));
+   407→        english[17].push(new RegExp("^" + "don.t " + curr_ops[0] + "!?" + "$"));
+   408→        english[18].push(new RegExp("^" + curr_ops[0] + "!?" + "$"));
+   409→        english[19].push(new RegExp("^" + curr_ops[0] + "!?" + "$"));
+   410→        english[20].push(new RegExp("^" + "\\(don.t\\) " + curr_ops[0] + "!?" + "$"));
+   411→        english[20].push(new RegExp("^" + "don.t " + curr_ops[0] + "/" + curr_ops[0] + "!?" + "$"));
+   412→        english[20].push(new RegExp("^" + curr_ops[0] + "/" + "don.t " + curr_ops[0] + "!?" + "$"));
+   413→        english[22].push(new RegExp("^" + "let.s " + curr_ops[0] + "!?" + "$"));
+   414→    }
+   415→    var order = ["inf", "ger", "part_pas", "pres", "imp", "pret", "pres_perf", "plu_perf", "fut", "fut_perf", "cond", "cond_perf", "pres_subj", 
+   416→    "imp_subj", "pres_perf_subj", "plu_perf_subj", "tu_pos", "tu_neg", "ud", "uds", "vos", "vos", "nos"];
+   417→
+   418→    var changed = false;
+   419→    for(var i = 0; i < order.length; i++) {
+   420→        var span_name = order[i];
+   421→        switch(i) {
+   422→            case 20:
+   423→                span_name += "_one_spanish";
+   424→                break;
+   425→            case 21:
+   426→                span_name += "_two_spanish";
+   427→                break;
+   428→            default:
+   429→                span_name +="_spanish";
+   430→                break;
+   431→        }
+   432→        var eng_name = order[i] + "_ingles";
+   433→        var span_ans = document.getElementById(span_name).value;
+   434→        var eng_ans = document.getElementById(eng_name).value;
+   435→        
+   436→        document.getElementById(span_name).style.color = "black"
+   437→        if(i != 21)
+   438→            document.getElementById(eng_name).style.color = "black"
+   439→
+   440→        span_ans = span_ans == null? "" : span_ans.toLowerCase().trim();
+   441→        eng_ans = eng_ans == null? "" : eng_ans.toLowerCase().trim();
+   442→
+   443→        if(span_ans == "" || !spanish[i].includes(span_ans)) {
+   444→            var most_similar;
+   445→            do {
+   446→                most_similar = getMostSimilar(span_ans, spanish[i]);
+   447→                spanish[i] = spanish[i].filter(item => item != most_similar)
+   448→            } while(i == 21 && document.getElementById("vos_one_spanish").value.indexOf(most_similar) != -1 && spanish[i].length > 0)
+   449→            document.getElementById(span_name).value += " **" + most_similar + "**";
+   450→            document.getElementById(span_name).style.color = "red";
+   451→            changed = true;
+   452→        }
+   453→        if(i != 21 && (eng_ans == "" || !english[i].some(elem => elem.test(eng_ans)))) {
+   454→            document.getElementById(eng_name).value += " **" + getMostSimilar(eng_ans, english[i]) + "**";
+   455→            document.getElementById(eng_name).style.color = "red";
+   456→            changed = true;
+   457→        }
+   458→    }
+   459→    if(!changed) {
+   460→        alert("¡Perfecto!");
+   461→    }
+   462→}
+   463→
+   464→// Get the most similar answer from the list given the (erroneous) input
+   465→function getMostSimilar(input, answers) {
+   466→    var minDist = 999;
+   467→    var minIdx = -1;
+   468→    var minLength = 999;
+   469→    for(var i = 0; i < answers.length; i++) {
+   470→        var curr_ans;
+   471→        if(answers[i] instanceof RegExp) {
+   472→            curr_ans = cleanString(answers[i].source);
+   473→        } else  {
+   474→            curr_ans = answers[i];
+   475→        }
+   476→        if(curr_ans.length < minLength) {
+   477→            minLength = curr_ans.length;
+   478→        }
+   479→        var sim_score = similarity(curr_ans, input);
+   480→        if(sim_score < minDist) {
+   481→            minDist = sim_score;
+   482→            minIdx = i;
+   483→        }
+   484→    }
+   485→    if(minDist == minLength)  {
+   486→        return answers[0] instanceof RegExp? cleanString(answers[0].source) : answers[0];
+   487→    } else {
+   488→        return answers[minIdx] instanceof RegExp? cleanString(answers[minIdx].source) : answers[minIdx];
+   489→    }
+   490→}
+   491→
+   492→// Convert the regex template to a string we can display to the user
+   493→function cleanString(str) {
+   494→    return str.replace(".", "'").replace("?", "").replace(/\\/g, "").replace("^", "").replace("$", "");
+   495→}
+   496→
+   497→// Return how many changes are needed to make the strings the same (Levenshtein distance)
+   498→function similarity(str1, str2) {
+   499→    
+   500→    let dp = [];
+   501→    for (let i = 0; i <= str1.length; i++) {
+   502→        dp[i] = [i];
+   503→    }
+   504→    for (let j = 0; j <= str2.length; j++) {
+   505→        dp[0][j] = j;
+   506→    }
+   507→
+   508→    
+   509→    for (let i = 1; i <= str1.length; i++) {
+   510→        for (let j = 1; j <= str2.length; j++) {
+   511→            let cost = (str1.charAt(i - 1) == str2.charAt(j - 1)) ? 0 : 1;
+   512→            dp[i][j] = Math.min(
+   513→                dp[i - 1][j] + 1,     
+   514→                dp[i][j - 1] + 1,     
+   515→                dp[i - 1][j - 1] + cost  
+   516→            );
+   517→        }
+   518→    }
+   519→    
+   520→    return dp[str1.length][str2.length];
+   521→}
+   522→
+   523→// Add an accent to the last vowel of the word fragment
+   524→function addAccent(word) {
+   525→    var tup = word;
+   526→    for(var i = tup.length - 1; i >= 0; i--) {
+   527→        if(tup.substring(i, i+1) == "a") {
+   528→            tup = tup.substring(0,i) + "á" + tup.substring(i+1);
+   529→            break;
+   530→        } else if(tup.substring(i, i+1) == "e") {
+   531→            tup = tup.substring(0,i) + "é" + tup.substring(i+1);
+   532→            break;
+   533→        } else if(tup.substring(i, i+1) == "i") {
+   534→            tup = tup.substring(0,i) + "í" + tup.substring(i+1);
+   535→            break;
+   536→        } else if(tup.substring(i, i+1) == "o") {
+   537→            tup = tup.substring(0,i) + "ó" + tup.substring(i+1);
+   538→            break;
+   539→        } else if(tup.substring(i, i+1) == "u") {
+   540→            tup = tup.substring(0,i) + "ú" + tup.substring(i+1);
+   541→            break;
+   542→        }
+   543→    }
+   544→    return tup;
+   545→}
+   546→
+   547→// Get the present subjunctive for a given verb and subject
+   548→function getPresSubj(stem, attr, sujeto1) {
+   549→    var pres_subj;
+   550→    var opp = attr.endingType == AR? 1:0;
+   551→    let suj = sujeto1 == YO? 2:sujeto1;
+   552→    if(attr.specialForms["subj"] != null) {
+   553→        return attr.specialForms["subj"][suj];
+   554→    }
+   555→    if(suj == NOSOTROS || suj == VOSOTROS) {
+   556→        pres_subj = getYo(stem, attr);
+   557→        pres_subj = pres_subj.substring(0, pres_subj.length - 1);
+   558→        if(attr.stemChangeType != NO_SC || stem == "adquir")  {
+   559→            var find;
+   560→            var change;
+   561→            for(var i = 0; i < pres_subj.length; i++) {
+   562→                if(pres_subj.substring(i, i+1) == "í") {
+   563→                    pres_subj = pres_subj.substring(0,i) + "i" + pres_subj.substring(i+1);
+   564→                }
+   565→            }
+   566→            if(attr.endingType != IR) {
+   567→                if(attr.stemChangeType == E_IE) {
+   568→                    find = "ie";
+   569→                    change = "e";
+   570→                }
+   571→                else if(attr.stemChangeType == E_I) {
+   572→                    find = "i";
+   573→                    change = "e";
+   574→                }
+   575→                else if(attr.stemChangeType == O_UE) {
+   576→                    find = "ue";
+   577→                    change = "o";
+   578→                }
+   579→            } else {
+   580→                if(attr.stemChangeType == E_IE) {
+   581→                    find = "ie";
+   582→                    change = "i";
+   583→                }
+   584→                else if(attr.stemChangeType == E_I) {
+   585→                    find = "i";
+   586→                    change = "i";
+   587→                }
+   588→                else if(attr.stemChangeType == O_UE) {
+   589→                    find = "ue";
+   590→                    change = "u";
+   591→                }  else if(stem == "adquir") {
+   592→                    find = "ie";
+   593→                    change = "i";
+   594→                }
+   595→            }
+   596→            for(var i = 0; i < pres_subj.length - 1; i++) {
+   597→                var look = pres_subj.substring(pres_subj.length - i - find.length, pres_subj.length - i);
+   598→                if(look == find) {
+   599→                    pres_subj = pres_subj.substring(0, pres_subj.length - i - find.length) + change + pres_subj.substring(pres_subj.length - i);
+   600→                    break;
+   601→                }
+   602→            }
+   603→        }
+   604→        pres_subj += pres_endings[opp][suj];
+   605→    } else {
+   606→        pres_subj = getYo(stem, attr);
+   607→        pres_subj = pres_subj.substring(0, pres_subj.length - 1) + pres_endings[opp][suj];
+   608→    }
+   609→    if(attr.isReflexive) {
+   610→        pres_subj = reflexive_pronouns[sujeto1] + " " + pres_subj;
+   611→    }
+   612→    if(attr.endingType == AR) {
+   613→        var ending = pres_endings[opp][suj];
+   614→        var inspect = pres_subj.substring(pres_subj.length - ending.length - 1, pres_subj.length - ending.length);
+   615→        if(inspect == "c") {
+   616→            pres_subj = pres_subj.substring(0, pres_subj.length - ending.length - 1) + "qu" + pres_subj.substring(pres_subj.length - ending.length);
+   617→        } else if(inspect == "g") {
+   618→            pres_subj = pres_subj.substring(0, pres_subj.length - ending.length - 1) + "gu" + pres_subj.substring(pres_subj.length - ending.length);
+   619→        } else if(inspect == "z") {
+   620→            pres_subj = pres_subj.substring(0, pres_subj.length - ending.length - 1) + "c" + pres_subj.substring(pres_subj.length - ending.length);
+   621→        }
+   622→    }
+   623→    return pres_subj;
+   624→}
+   625→
+   626→// Gets the stem for the third person preterite conjugation and attaches the correct ending based on plural or singular
+   627→function getEllos(stem, attr, sujeto1) {
+   628→    var pret;
+   629→    var idx = sujeto1 == EL? 3:6;
+   630→    var suj_idx = attr.endingType == AR? 0:1;
+   631→    if(attr.endingType == IR) {
+   632→        pret = stemChange(stem, attr.stemChangeType, true) + pret_endings[suj_idx][sujeto1];
+   633→    } else {
+   634→        pret = stem + pret_endings[suj_idx][sujeto1];
+   635→    }
+   636→    if(suj_idx == 1) {
+   637→        var start = pret.length - idx;
+   638→        var end = pret.length - idx + 1;
+   639→        if(pret.substring(start, end) == "i") {
+   640→            pret = pret.substring(0, start) + pret.substring(end);
+   641→        } else if(pret.substring(start, end) == "a" || pret.substring(start, end) == "e" || pret.substring(start, end) == "u" && 
+   642→                pret.substring(start - 1, start) != "q" && pret.substring(start-1, start) != "g") {
+   643→            pret = pret.substring(0, pret.length - idx + 1) + "y" + pret.substring(pret.length - idx + 2);
+   644→        }
+   645→    }
+   646→    if(attr.specialForms["pret"] != null) {
+   647→        pret = attr.specialForms["pret"][sujeto1];
+   648→    }
+   649→
+   650→    return pret;
+   651→}
+   652→
+   653→// Get the 1st person singular conjugation of the verb in the present tense 
+   654→function getYo(stem, attr) {
+   655→    var tbr;
+   656→    if(attr.specialForms["yo"] == null) {
+   657→        if(attr.specialForms["boot"] == null) {
+   658→            tbr= stemChange(stem, attr.stemChangeType, false) + "o";
+   659→        } else {
+   660→            tbr= attr.specialForms["boot"] + "o";
+   661→        }
+   662→    } else {
+   663→        tbr= attr.specialForms["yo"] + "o";
+   664→    }
+   665→    return tbr;
+   666→}
+   667→
+   668→// Stem change the given verb stem
+   669→function stemChange(stem, type, oneLetter) {
+   670→    if(type == NO_SC) {
+   671→        return stem;
+   672→    }
+   673→    var tbr;
+   674→    var i;
+   675→    for(i = stem.length - 1; i >= 0; i--) {
+   676→        if(stem.substring(i, i+1) == "e") {
+   677→            if(type == E_IE) {
+   678→                if(oneLetter) {
+   679→                    tbr = stem.substring(0,i) + "i";
+   680→                    break;
+   681→                } else {
+   682→                    tbr = stem.substring(0,i) + "ie";
+   683→                    break
+   684→                }
+   685→            } else if(type == E_I) {
+   686→                tbr = stem.substring(0,i) + "i";
+   687→                break;
+   688→            }
+   689→        } else if(stem.substring(i, i+1) == "o") {
+   690→            if(type == O_UE) {
+   691→                if(oneLetter) {
+   692→                    tbr = stem.substring(0,i) + "u";
+   693→                    break;
+   694→                } else {
+   695→                    tbr = stem.substring(0,i) + "ue";
+   696→                    break;
+   697→                }
+   698→            }
+   699→        }
+   700→    }
+   701→    if(i != stem.length-1) {
+   702→        tbr += stem.substring(i+1);
+   703→    }
+   704→    return tbr;
+   705→}
