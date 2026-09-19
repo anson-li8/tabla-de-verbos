@@ -52,3 +52,46 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.code-workspace
+
+# Caches
+.eslintcache
+.stylelintcache
+.cache/
+.parcel-cache/
+.turbo/
+
+# Testing
+.nyc_output/
+*.lcov
+playwright-report/
+test-results/
+
+# Netlify
+.netlify/
+
+# Misc
+*.pid
+*.seed
+*.tgz
+*.tmp
+*.temp
+*.bak
+.history/
+
+# Optional: ignore npm lockfile if you only want to use Bun
+# package-lock.json

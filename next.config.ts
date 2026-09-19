@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   // fully static export — `next build` emits the deployable site
   // into ./out (no server, no API routes, no database: everything
   // runs client-side with localStorage persistence)
+  devIndicators: false,
   output: "export",
   images: {
     // no image optimizer in a static export — all icons are
