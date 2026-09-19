@@ -13,11 +13,14 @@ import {
   Flame,
   ImageDown,
   Loader2,
+  Minus,
   Play,
   Settings2,
   Share2,
   Sparkles,
   Target,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -56,6 +59,9 @@ interface ResultsScreenProps {
   sessionsLoading: boolean;
   /** short drill label for the mode line ("miss drill" / "verb drill") */
   drillShort?: string | null;
+  /** personal pace baseline (ms/question) captured BEFORE this
+   *  session was saved — null when history is too thin to compare */
+  baselineAvgMs?: number | null;
   onPracticeAgain: () => void;
   onDrillMisses: (misses: MissRecord[]) => void;
   /** start a focused drill on a single verb (miss-row verb buttons) */
@@ -69,6 +75,7 @@ export function ResultsScreen({
   sessions,
   sessionsLoading,
   drillShort,
+  baselineAvgMs,
   onPracticeAgain,
   onDrillMisses,
   onVerbDrill,
@@ -119,6 +126,9 @@ export function ResultsScreen({
     drillShort ?? (summary.mode === "timed" ? "timed" : "infinite")
   } · ${formatDuration(summary.durationSec)}`;
   const drillVerbCount = new Set(summary.misses.map((m) => m.verb)).size;
+
+  // ── pace insight: this session vs the personal baseline ──
+  const pace = paceInsight(summary.avgMsPerQuestion, baselineAvgMs ?? null);
 
   // sorted per-tense rows — weakest first, only tenses actually answered
   const tallyRows = Object.entries(summary.tally ?? {})
@@ -244,6 +254,28 @@ export function ResultsScreen({
                 <p className="mt-1 font-mono text-lg leading-none tabular-nums">
                   {(summary.avgMsPerQuestion / 1000).toFixed(1)}s
                 </p>
+                {pace && (
+                  <p
+                    className={cn(
+                      "mt-1.5 flex items-center gap-1 font-mono text-[10px] leading-none",
+                      pace.tone === "good"
+                        ? "text-success"
+                        : pace.tone === "slow"
+                          ? "text-warn"
+                          : "text-muted-foreground"
+                    )}
+                    role="status"
+                  >
+                    {pace.tone === "good" ? (
+                      <TrendingDown className="size-3 shrink-0" aria-hidden="true" />
+                    ) : pace.tone === "slow" ? (
+                      <TrendingUp className="size-3 shrink-0" aria-hidden="true" />
+                    ) : (
+                      <Minus className="size-3 shrink-0" aria-hidden="true" />
+                    )}
+                    {pace.label}
+                  </p>
+                )}
               </div>
               <div>
                 <p className={MICRO}>accent warnings</p>
@@ -413,6 +445,39 @@ export function ResultsScreen({
       </motion.section>
     </div>
   );
+}
+
+// ── Pace insight ──────────────────────────────────────────
+
+/** compare this session's pace against the personal baseline →
+ *  a short line + tone, or null when there's nothing to say */
+function paceInsight(
+  sessionAvgMs: number,
+  baselineAvgMs: number | null
+): { label: string; tone: "good" | "slow" | "even" } | null {
+  if (
+    !baselineAvgMs ||
+    baselineAvgMs <= 0 ||
+    sessionAvgMs <= 0 ||
+    !Number.isFinite(sessionAvgMs)
+  ) {
+    return null;
+  }
+  const ratio = sessionAvgMs / baselineAvgMs;
+  const vs = (baselineAvgMs / 1000).toFixed(1);
+  if (ratio <= 0.9) {
+    return {
+      label: `${(1 / ratio).toFixed(1)}× faster than your ${vs}s avg`,
+      tone: "good",
+    };
+  }
+  if (ratio >= 1.15) {
+    return {
+      label: `${ratio.toFixed(1)}× slower than your ${vs}s avg`,
+      tone: "slow",
+    };
+  }
+  return { label: `right at your ${vs}s average`, tone: "even" };
 }
 
 // ── Miss row ─────────────────────────────────────────────────

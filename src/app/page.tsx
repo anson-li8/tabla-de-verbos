@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
+import { HelpDialog } from "@/components/app/help-dialog";
+import { InstallHint } from "@/components/app/install-hint";
 import { LogoMark } from "@/components/app/logo-mark";
 import { ModeSwitcher, type AppMode } from "@/components/app/mode-switcher";
 import { ThemeToggle } from "@/components/app/theme-toggle";
@@ -19,14 +21,16 @@ export default function Home() {
   // a verb handed from Tables mode ("quiz me") to Practice mode —
   // consumed once by PracticeMode on mount/prop change
   const [quizVerb, setQuizVerb] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const handleQuizVerb = (verb: string) => {
     setQuizVerb(verb);
     setMode("practice");
   };
 
-  // keyboard shortcuts: 1 / 2 (or T / P) jump between modes — ignored while
-  // typing in an input, using modifiers, or when a dialog is open
+  // keyboard shortcuts: 1 / 2 (or T / P) jump between modes, ?
+  // opens the cheatsheet — ignored while typing in an input, using
+  // modifiers, or when a dialog is open
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -40,12 +44,17 @@ export default function Home() {
       ) {
         return;
       }
-      if (document.querySelector("[role=alertdialog][data-state=open]")) {
+      if (
+        document.querySelector(
+          "[role=alertdialog][data-state=open], [role=dialog][data-state=open]"
+        )
+      ) {
         return;
       }
       const key = e.key.toLowerCase();
       if (key === "1" || key === "t") setMode("tables");
       else if (key === "2" || key === "p") setMode("practice");
+      else if (e.key === "?") setHelpOpen(true);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -68,10 +77,14 @@ export default function Home() {
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <ModeSwitcher mode={mode} onModeChange={setMode} />
+            <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
             <ThemeToggle />
           </div>
         </div>
       </header>
+
+      {/* PWA install hint (only when the browser offers it) */}
+      <InstallHint />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
         <AnimatePresence mode="wait">
@@ -103,6 +116,7 @@ export default function Home() {
           <p className="font-display text-[12px] italic text-muted-foreground/80">
             <span className="hidden sm:inline">press 1 / 2 to switch modes · </span>
             <span className="hidden md:inline">arrows + enter to fill the chart · </span>
+            <span>? for shortcuts · </span>
             accents count
           </p>
         </div>

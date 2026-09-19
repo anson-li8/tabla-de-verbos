@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { BadgeCheck, Check, ChevronsUpDown } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,12 +26,19 @@ import {
 import {
   SP5_VERBS,
   SP6_VERBS,
+  TENSE_ROWS,
+  SUBJECTS,
   verbGlosses,
   verbLevel,
+  type SubjectKey,
 } from "@/lib/conjugator/types";
 import { cn } from "@/lib/utils";
 
 import type { LevelFilter } from "./types";
+import {
+  MASTERY_THRESHOLD,
+  type MasteryMap,
+} from "./use-cell-mastery";
 
 /** accent-insensitive lowercase search normalizer */
 const normalize = (value: string) =>
@@ -44,10 +51,45 @@ interface VerbPickerProps {
   value: string;
   level: LevelFilter;
   onChange: (verb: string) => void;
+  /** current subject — mastery counters are scoped to it */
+  subject: SubjectKey;
+  /** per-cell mastery stats (localStorage) */
+  mastery: MasteryMap;
 }
 
-export function VerbPicker({ value, level, onChange }: VerbPickerProps) {
+export function VerbPicker({ value, level, onChange, subject, mastery }: VerbPickerProps) {
   const [open, setOpen] = useState(false);
+
+  // per-verb mastered-row counts for the CURRENT subject — a row
+  // counts when both its es and en cells reached the mastery
+  // threshold. One pass over the (bounded) mastery map.
+  const masteredCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const [key, stat] of Object.entries(mastery)) {
+      // key shape: verb|subject|row|lang
+      const parts = key.split("|");
+      if (parts.length !== 4) continue;
+      const [verb, subj, row, lang] = parts;
+      if (subj !== subject || lang !== "es") continue;
+      if (stat.c < MASTERY_THRESHOLD) continue;
+      const en = mastery[`${verb}|${subject}|${row}|en`];
+      if (en && en.c >= MASTERY_THRESHOLD) {
+        counts.set(verb, (counts.get(verb) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [mastery, subject]);
+
+  const completedCharts = useMemo(
+    () =>
+      [...masteredCounts.values()].filter(
+        (count) => count >= TENSE_ROWS.length
+      ).length,
+    [masteredCounts]
+  );
+
+  const subjectPronoun =
+    SUBJECTS.find((s) => s.key === subject)?.pronoun ?? subject;
 
   const groups = useMemo(() => {
     const result: { level: 5 | 6; label: string; verbs: string[] }[] = [];
@@ -98,7 +140,13 @@ export function VerbPicker({ value, level, onChange }: VerbPickerProps) {
               </TooltipContent>
             </Tooltip>
           )}
-          <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden="true" />
+          <ChevronsUpDown
+            className={cn(
+              "size-4 shrink-0 opacity-50 transition-transform duration-200",
+              open && "rotate-180"
+            )}
+            aria-hidden="true"
+          />
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -116,40 +164,90 @@ export function VerbPicker({ value, level, onChange }: VerbPickerProps) {
               no verb matches that search.
             </CommandEmpty>
             {groups.map((group) => (
-              <CommandGroup key={group.level} heading={group.label}>
-                {group.verbs.map((verb) => (
-                  <CommandItem
-                    key={verb}
-                    value={`${verb} ${verbGlosses(verb)}`}
-                    onSelect={() => {
-                      onChange(verb);
-                      setOpen(false);
-                    }}
-                    className="gap-2 py-2"
-                  >
-                    <Check
-                      className={cn(
-                        "size-4 shrink-0",
-                        value === verb ? "opacity-100" : "opacity-0"
-                      )}
+              <CommandGroup
+                key={group.level}
+                heading={
+                  <span className="flex items-center gap-2">
+                    <span
                       aria-hidden="true"
+                      className="inline-block h-px w-3 shrink-0 translate-y-[-1px] bg-primary/70"
                     />
-                    <span className="font-display text-[15px] font-medium">
-                      {verb}
-                    </span>
-                    <span className="truncate font-mono text-[11px] text-muted-foreground">
-                      {verbGlosses(verb)}
-                    </span>
-                    <Badge
-                      variant="outline"
-                      className="ml-auto font-mono text-[10px] tabular-nums"
+                    {group.label}
+                  </span>
+                }
+              >
+                {group.verbs.map((verb) => {
+                  const mastered = masteredCounts.get(verb) ?? 0;
+                  const complete = mastered >= TENSE_ROWS.length;
+                  return (
+                    <CommandItem
+                      key={verb}
+                      value={`${verb} ${verbGlosses(verb)}`}
+                      onSelect={() => {
+                        onChange(verb);
+                        setOpen(false);
+                      }}
+                      className="gap-2 py-2"
                     >
-                      {group.level}
-                    </Badge>
-                  </CommandItem>
-                ))}
+                      <Check
+                        className={cn(
+                          "size-4 shrink-0",
+                          value === verb ? "opacity-100" : "opacity-0"
+                        )}
+                        aria-hidden="true"
+                      />
+                      <span className="font-display text-[15px] font-medium">
+                        {verb}
+                      </span>
+                      <span className="truncate font-mono text-[11px] text-muted-foreground">
+                        {verbGlosses(verb)}
+                      </span>
+                      <span className="ml-auto flex shrink-0 items-center gap-2">
+                        {mastered > 0 && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                className={cn(
+                                  "flex items-center gap-1 font-mono text-[10px] tabular-nums",
+                                  complete
+                                    ? "text-success"
+                                    : "text-muted-foreground/80"
+                                )}
+                              >
+                                {complete && (
+                                  <BadgeCheck
+                                    className="size-3.5"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                                {mastered}/{TENSE_ROWS.length}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {complete
+                                ? `${verb} — full chart mastered for ${subjectPronoun}`
+                                : `${mastered} of ${TENSE_ROWS.length} rows mastered for ${subjectPronoun}`}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        <Badge
+                          variant="outline"
+                          className="font-mono text-[10px] tabular-nums"
+                        >
+                          {group.level}
+                        </Badge>
+                      </span>
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
             ))}
+            {masteredCounts.size > 0 && (
+              <p className="border-t px-3 py-2.5 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+                charts mastered for {subjectPronoun}: {completedCharts}/
+                {groups.reduce((a, g) => a + g.verbs.length, 0)}
+              </p>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

@@ -359,7 +359,13 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
         <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
           <div className="flex min-w-[200px] flex-1 flex-col gap-2 sm:flex-none">
             <MicroLabel>verb</MicroLabel>
-            <VerbPicker value={verb} level={level} onChange={handleVerbChange} />
+            <VerbPicker
+              value={verb}
+              level={level}
+              onChange={handleVerbChange}
+              subject={subject}
+              mastery={mastery}
+            />
           </div>
 
           <div className="flex flex-col gap-2">
@@ -483,6 +489,7 @@ export default function TablesMode({ onQuizVerb }: TablesModeProps) {
         masteredCount={masteredCount}
         onAnswerChange={handleAnswerChange}
         onRequestCheck={handleCheck}
+        onQuizVerb={onQuizVerb}
       />
     </div>
   );

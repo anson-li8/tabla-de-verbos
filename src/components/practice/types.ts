@@ -98,6 +98,9 @@ export interface SessionStats {
   bestStreak: number;
   avgAccuracy: number;
   totalQuestions: number;
+  /** question-weighted average ms/question across all saved
+   *  sessions (null when nothing has been answered yet) */
+  avgMsPerQuestion: number | null;
 }
 
 export interface SessionsResponse {
@@ -418,16 +421,31 @@ function validateQuestion(q: Question): Question {
   return q;
 }
 
-/** POST /api/practice/question → next Question.
+/** a fetched question + where it came from (API or offline fallback) */
+export interface QuestionFetch {
+  question: Question;
+  /** true when /api/practice/question was unreachable and the
+   *  question was generated locally (offline PWA practice) */
+  offline: boolean;
+}
+
+/** POST /api/practice/question → next Question + its source.
  *  Falls back to local generation when the API is unreachable
  *  (offline PWA shell) — the generator is pure, shared code. */
-export async function fetchQuestion(settings: QuizSettings): Promise<Question> {
+export async function fetchQuestionDetailed(
+  settings: QuizSettings
+): Promise<QuestionFetch> {
   try {
     const q = await postJson<Question>("/api/practice/question", settings);
-    return validateQuestion(q);
+    return { question: validateQuestion(q), offline: false };
   } catch {
-    return generateQuestion(settings);
+    return { question: generateQuestion(settings), offline: true };
   }
+}
+
+/** POST /api/practice/question → next Question (source-agnostic). */
+export async function fetchQuestion(settings: QuizSettings): Promise<Question> {
+  return (await fetchQuestionDetailed(settings)).question;
 }
 
 /** GET /api/sessions?limit=8 → { recent, stats } */

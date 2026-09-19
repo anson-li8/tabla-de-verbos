@@ -2,9 +2,10 @@
 
 import { useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, BadgeCheck, BookOpen, Check } from "lucide-react";
+import { AlertTriangle, BadgeCheck, BookOpen, Check, Zap } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -14,6 +15,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   SUBJECTS,
   TENSE_ROWS,
@@ -219,6 +225,8 @@ interface ConjugationChartProps {
   masteredCount: number;
   onAnswerChange: (key: RowKey, lang: CellLang, value: string) => void;
   onRequestCheck: () => void;
+  /** hand this verb to Practice mode for a focused quiz */
+  onQuizVerb?: (verb: string) => void;
 }
 
 export function ConjugationChart({
@@ -232,6 +240,7 @@ export function ConjugationChart({
   masteredCount,
   onAnswerChange,
   onRequestCheck,
+  onQuizVerb,
 }: ConjugationChartProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
 
@@ -325,6 +334,25 @@ export function ConjugationChart({
                 <BadgeCheck className="size-3" aria-hidden="true" />
                 {masteredCount}/{TENSE_ROWS.length} mastered
               </Badge>
+            )}
+            {onQuizVerb && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onQuizVerb(verb)}
+                    aria-label={`quiz me on ${verb}`}
+                    className="h-7 gap-1.5 rounded-lg border-primary/30 px-2.5 font-mono text-[10px] uppercase tracking-[0.12em] text-primary hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+                  >
+                    <Zap className="size-3" aria-hidden="true" />
+                    quiz me
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  practice {verb} in a focused infinite drill
+                </TooltipContent>
+              </Tooltip>
             )}
           </div>
         </CardAction>

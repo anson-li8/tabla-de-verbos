@@ -30,7 +30,7 @@ export function AccentKeys({ onInsert, disabled = false }: AccentKeysProps) {
           onClick={() => onInsert(ch)}
           aria-label={`insert ${ch}`}
           className={cn(
-            "h-10 w-10 rounded-lg border bg-card font-mono text-sm shadow-xs outline-none transition-colors sm:h-11 sm:w-11",
+            "h-10 w-10 rounded-lg border bg-card font-mono text-sm shadow-xs outline-none transition active:scale-90 sm:h-11 sm:w-11",
             "hover:border-primary/50 hover:bg-accent/60 focus-visible:ring-[3px] focus-visible:ring-ring/50",
             "disabled:pointer-events-none disabled:opacity-40"
           )}

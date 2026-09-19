@@ -387,3 +387,47 @@ Task: Continuous improvement round 6 — status assessment, QA, focus-panel insi
 - Next-round candidate features (priority order): (1) offline indicator — a small badge when the SW controls the page & the last question came from the local generator; (2) mastery-aware verb picker — dim/check verbs with all rows mastered for the current subject; (3) install prompt hint (beforeinstallprompt) for the new PWA; (4) pace insight on the results screen (avgMs vs personal overall avg); (5) cross-tab mastery sync via BroadcastChannel (low priority — single-tab use is fine).
 - scripts/gen-icons.ts kept (regenerates PWA icons from icon.svg); scripts/seed-hours.ts (temp) deleted.
 - QA screenshot artifacts: /home/z/my-project/qa/r6-*.png (19 files) + qa/r6-07-share-card.png (the generated card).
+
+---
+Task ID: 7
+Agent: main-orchestrator
+Task: Round 7 — status assessment, agent-browser QA, 7 new features (offline indicator, mastery-aware verb picker, PWA install hint, results pace insight, streak milestones, keyboard help dialog, chart quiz-me button) + styling detail pass
+
+Work Log:
+- Assessed baseline: dev server healthy on :3000, lint clean, tsc clean (src/ — pre-existing tsc errors in examples/ & skills/ scaffolding are NOT app code), engine PASS 13397/13397.
+- QA pass with agent-browser (named session, fresh browser at the end to avoid stale console buffers): Tables fill → check (border-success feedback confirmed), full timed session → results → session saved, all APIs + PWA assets 200. NO app bugs found — proceeded to features.
+- QA harness notes: buttons render lowercase in DOM (CSS-uppercased) — click via textContent==='check' or aria-label; question prompts ARE the h2 text (initially misread "you constructed" as a UI label — it was the question); fetch-logging patch (window.__qaAnswers of full objects, matched by promptMain) powers automated correct-answer streaks.
+
+## Goals / completed modifications / verification results
+1. FEATURE — offline indicator (quiz):
+   - types.ts: new QuestionFetch + fetchQuestionDetailed() returning {question, offline} (API vs local-generator fallback); fetchQuestion() kept as wrapper.
+   - quiz-screen: offlineQuestion state + browser online/offline event listeners; showOffline = either. Animated height banner inside the sticky stats strip: WifiOff warn icon + "offline — questions generated on your device, nothing is lost". CRITICAL BUG FOUND & FIXED during QA: the prefetched-question advance path didn't carry the offline flag (nextOfflineRef added; advance() consumes it together with the question; prefetch .then stores it). VERIFIED: fetch-reject interception → banner shows from start, persists across prefetched questions, session still ends with results.
+2. FEATURE — pace insight (results screen):
+   - GET /api/sessions: stats gained question-weighted avgMsPerQuestion (null when no sessions; third findMany of {avgMsPerQuestion,total} summed in the route; SessionStats type updated).
+   - practice-mode: sessionsRef mirrors sessions state; handleQuizEnd captures the PRE-save personal baseline (gate: ≥2 prior sessions AND ≥10 prior questions) → baselineAvgMs prop.
+   - results-screen: paceInsight() → "1.4× faster than your 4.0s avg" (success, TrendingDown) / "× slower" (warn, TrendingUp) / "right at your average" (muted, Minus), under AVG / QUESTION. VERIFIED live: 6/6 session, 2.9s/q vs 4.0s baseline → "1.4× faster".
+3. FEATURE — mastery-aware verb picker (Tables):
+   - verb-picker: new subject + mastery props; one-pass masteredCounts Map (row counts only when BOTH es+en cells ≥ MASTERY_THRESHOLD, scoped to current subject); per-verb mono "n/23" counter (success + BadgeCheck at 23), tooltip explains the rule, footer line "charts mastered for {pronoun}: X/52". VERIFIED with seeded localStorage: hablar 2/23, hacer 1/23, footer renders.
+4. FEATURE — "quiz me" on the chart header (Tables):
+   - conjugation-chart: onQuizVerb prop → small brick-tinted Zap "quiz me" button (Tooltip: focused infinite drill) in CardAction next to the mastery badge; tables-mode passes onQuizVerb through. VERIFIED: click → Practice mode, "VERB DRILL · CAER" session starts.
+5. FEATURE — PWA install hint:
+   - NEW src/components/app/install-hint.tsx: captures beforeinstallprompt (requires event.prompt function); dismissible (localStorage tdv-install-dismissed, checked inside the event handler — never nags after dismissal; react-hooks/set-state-in-effect-safe); appinstalled clears it. Slim banner under the header, Download icon, install + X buttons. VERIFIED via synthetic event dispatch: shows, X dismisses (stored "1"), re-dispatch stays hidden.
+6. FEATURE — keyboard help dialog:
+   - NEW src/components/app/help-dialog.tsx: "atajos de teclado" Dialog with kbd-styled ShortcutRows (1/2 modes, ?, Enter submit/walk+check, ↑↓ rows, ←→ cells) + accents & offline notes. page.tsx: header Keyboard icon button + "?" shortcut (ignores inputs, modifiers, open dialogs incl. role=dialog); footer hint "? for shortcuts". VERIFIED: opens via button AND "?" key.
+7. FEATURE — streak milestone toasts:
+   - quiz-screen: streakToast at every correct multiple of 5 (5 "¡sigue así!", 10 "¡en fuego!", 15+ "imparable"); flame pulses (animate-pulse + primary) and streak number tints at ≥5. VERIFIED: 6-correct automated run → "¡racha de 5!" toast rendered.
+8. STYLING (mandatory):
+   - Verb picker: signature brick dash before group headings (español 5/6) — computed 12×1px oklab(0.49 0.13 0.07/0.7) VERIFIED; ChevronsUpDown rotates 180° while open (transition-transform).
+   - Accent keys: press feedback active:scale-90 (transition covers transform).
+   - Timer: countdown pulses (animate-pulse) in danger zone alongside destructive color.
+   - Quiz input: italic Fraunces placeholder at 60% (computed VERIFIED, matches chart placeholders); question h2 text-balance.
+   - Live ACC in the stat strip tints by band after ≥5 questions (≥80% success / <50% destructive / else primary).
+9. QA/verification: lint clean; tsc clean (src/); engine PASS 13398/13398; all features browser-verified as noted; mobile 390px both modes 0 overflow offenders; dark-mode screenshots taken (r7-14/15) + 0 overflow; fresh-browser relaunch = ZERO console errors (the mid-round compile error was the MultiEdit stray-n corruption — fixed immediately; stale daemon console buffer had kept echoing it); DB cleaned to 0 sessions; fresh browser profile = clean localStorage for the user.
+
+## Unresolved issues / risks / next-round priorities
+- VLM image review was NOT possible this round (z-ai CLI + SDK both 401 "missing X-Token" — credentials not provisioned). Fell back to computed-style DOM verification for all styling claims. Next round: retry VLM for a visual pass.
+- MultiEdit corruption gremlin struck ONCE again (stray `n` in verb-picker tooltip line 211) — caught by reading the file after every MultiEdit; keep that rule sacred.
+- agent-browser console command shows the daemon-wide cumulative buffer — old errors keep appearing even in fresh tabs. To prove zero-errors: `agent-browser close` (full browser restart) then open + console.
+- StrictMode double-invokes the prefetch effect in dev → duplicate /api/practice/question calls per question (harmless, dev-only, explains the extra fetch logs in QA).
+- Next-round candidate features (priority): (1) mastery-aware "random" — bias RANDOM toward un-mastered verbs/subjects in Tables; (2) practice-mode streak milestone confetti burst (toasts exist, no confetti at 5/10); (3) verb-picker "hide mastered" toggle + sort-by-mastery option; (4) cross-tab mastery sync via BroadcastChannel (still low priority); (5) offline queue for unsaved sessions (currently sessions answered offline are lost — only generated locally, save fails silently).
+- QA artifacts: /home/z/my-project/qa/r7-*.png (17 files).

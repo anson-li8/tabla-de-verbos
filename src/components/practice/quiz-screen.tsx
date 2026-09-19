@@ -27,6 +27,7 @@ import {
   Loader2,
   RotateCw,
   Square,
+  WifiOff,
 } from "lucide-react";
 
 import {
@@ -46,6 +47,7 @@ import { Input } from "@/components/ui/input";
 
 import { checkAnswer } from "@/lib/conjugator/checker";
 import { SUBJECTS } from "@/lib/conjugator/types";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 import { AccentKeys } from "./accent-keys";
@@ -53,7 +55,7 @@ import { TimerRing } from "./timer-ring";
 import {
   MICRO,
   answerLang,
-  fetchQuestion,
+  fetchQuestionDetailed,
   formatCountdownMs,
   formatMs,
   kindLabel,
@@ -69,6 +71,9 @@ type Phase = "asking" | "right" | "accent" | "wrong";
 
 interface QuizScreenProps {
   initialQuestion: Question;
+  /** true when the first question came from the local (offline)
+   *  generator — shows the offline chip from the start */
+  initialOffline?: boolean;
   settings: QuizSettings;
   /** chip label for focused drills ("miss drill · 3 verbs") — null for normal sessions */
   drillLabel?: string | null;
@@ -78,6 +83,7 @@ interface QuizScreenProps {
 
 export function QuizScreen({
   initialQuestion,
+  initialOffline = false,
   settings,
   drillLabel,
   onEnd,
@@ -85,6 +91,7 @@ export function QuizScreen({
 }: QuizScreenProps) {
   const timed = settings.mode === "timed";
   const totalTimeMs = settings.durationSec * 1000;
+  const { toast } = useToast();
 
   // ── clock: timestamp math, 250ms tick, no drift ───────────
   const [startedAt] = useState(() => Date.now());
@@ -119,6 +126,30 @@ export function QuizScreen({
   const [nextQuestion, setNextQuestion] = useState<Question | null>(null);
   const [fetchError, setFetchError] = useState(false);
   const questionStartRef = useRef(Date.now());
+  /** offline flag of the prefetched next question — consumed by
+   *  advance() together with the question itself */
+  const nextOfflineRef = useRef(false);
+
+  // ── offline state ─────────────────────────────────────────
+  // tracks BOTH the browser's connection (online/offline events)
+  // AND whether the last question actually came from the local
+  // generator (the API can be unreachable even when "online")
+  const [offlineQuestion, setOfflineQuestion] = useState(initialOffline);
+  const [browserOffline, setBrowserOffline] = useState(false);
+
+  useEffect(() => {
+    setBrowserOffline(!navigator.onLine);
+    const onOffline = () => setBrowserOffline(true);
+    const onOnline = () => setBrowserOffline(false);
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+    return () => {
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
+    };
+  }, []);
+
+  const showOffline = offlineQuestion || browserOffline;
 
   // ── answer flow ────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>("asking");
@@ -148,9 +179,10 @@ export function QuizScreen({
     setQuestion(null);
     setFetchError(false);
     try {
-      const q = await fetchQuestion(settings);
+      const { question: q, offline } = await fetchQuestionDetailed(settings);
       if (finishedRef.current) return;
       setQuestion(q);
+      setOfflineQuestion(offline);
       questionStartRef.current = Date.now();
     } catch {
       if (finishedRef.current) return;
@@ -204,6 +236,7 @@ export function QuizScreen({
     if (next) {
       setNextQuestion(null);
       setQuestion(next);
+      setOfflineQuestion(nextOfflineRef.current);
       questionStartRef.current = Date.now();
       return;
     }
@@ -248,6 +281,20 @@ export function QuizScreen({
     };
   };
 
+  /** streak milestone copy — fires at every multiple of 5 */
+  const streakToast = (n: number) => {
+    const description =
+      n === 5
+        ? "five in a row — ¡sigue así!"
+        : n === 10
+          ? "double digits — ¡en fuego!"
+          : `${n} in a row — imparable`;
+    toast({
+      title: `¡racha de ${n}!`,
+      description,
+    });
+  };
+
   const submit = () => {
     if (!question || phase !== "asking") return;
     const value = input.trim();
@@ -267,6 +314,7 @@ export function QuizScreen({
       setBestStreak((b) => Math.max(b, nextStreak));
       tallyAnswer(true, dtMs);
       setPhase("right");
+      if (nextStreak >= 5 && nextStreak % 5 === 0) streakToast(nextStreak);
       scheduleAdvance(550);
     } else if (result === "accent") {
       // counts as correct, just nudge about the accents
@@ -277,6 +325,7 @@ export function QuizScreen({
       setAccentWarnings((w) => w + 1);
       tallyAnswer(true, dtMs);
       setPhase("accent");
+      if (nextStreak >= 5 && nextStreak % 5 === 0) streakToast(nextStreak);
       scheduleAdvance(900);
     } else {
       setStreak(0);
@@ -338,9 +387,12 @@ export function QuizScreen({
   useEffect(() => {
     if (!question || nextQuestion || finishedRef.current) return;
     let cancelled = false;
-    fetchQuestion(settings)
-      .then((q) => {
-        if (!cancelled && !finishedRef.current) setNextQuestion(q);
+    fetchQuestionDetailed(settings)
+      .then(({ question: q, offline }) => {
+        if (!cancelled && !finishedRef.current) {
+          setNextQuestion(q);
+          nextOfflineRef.current = offline;
+        }
       })
       .catch(() => {
         // silent — advance() falls back to a direct fetch + retry UI
@@ -398,7 +450,7 @@ export function QuizScreen({
                   <p
                     className={cn(
                       "font-mono text-base font-medium leading-none tabular-nums",
-                      danger && "text-destructive"
+                      danger && "animate-pulse text-destructive"
                     )}
                   >
                     {formatCountdownMs(remainingMs)}
@@ -441,19 +493,38 @@ export function QuizScreen({
                   <Flame
                     className={cn(
                       "size-4",
-                      streak > 0 ? "text-primary" : "text-muted-foreground/60"
+                      streak >= 5
+                        ? "animate-pulse text-primary"
+                        : streak > 0
+                          ? "text-primary"
+                          : "text-muted-foreground/60"
                     )}
                     aria-hidden="true"
                   />
                 </motion.span>
-                <span className="font-mono text-base font-medium leading-none tabular-nums">
+                <span
+                  className={cn(
+                    "font-mono text-base font-medium leading-none tabular-nums",
+                    streak >= 5 && "text-primary"
+                  )}
+                >
                   {streak}
                 </span>
               </div>
             </div>
             <div>
               <p className={MICRO}>acc</p>
-              <p className="font-mono text-base font-medium leading-none tabular-nums">
+              <p
+                className={cn(
+                  "font-mono text-base font-medium leading-none tabular-nums",
+                  total >= 5 &&
+                    (score / total >= 0.8
+                      ? "text-success"
+                      : score / total < 0.5
+                        ? "text-destructive"
+                        : "text-primary")
+                )}
+              >
                 {accuracyLabel}
               </p>
             </div>
@@ -487,6 +558,33 @@ export function QuizScreen({
             </AlertDialog>
           </div>
         </div>
+
+        {/* offline banner — the browser lost its connection or the
+            questions are being generated locally (PWA offline) */}
+        <AnimatePresence>
+          {showOffline && (
+            <motion.div
+              key="offline"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="overflow-hidden"
+            >
+              <p
+                className="flex items-center gap-1.5 pt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/90"
+                role="status"
+              >
+                <WifiOff
+                  className="size-3.5 shrink-0 text-warn"
+                  aria-hidden="true"
+                />
+                offline — questions generated on your device, nothing
+                is lost
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* ── question area ── */}
@@ -541,7 +639,7 @@ export function QuizScreen({
                 </div>
 
                 {/* the star of the screen */}
-                <h2 className="mx-auto max-w-2xl break-words px-2 py-7 text-center font-display text-4xl font-medium leading-[1.08] tracking-tight sm:py-9 sm:text-5xl lg:text-6xl">
+                <h2 className="mx-auto max-w-2xl break-words px-2 py-7 text-center font-display text-4xl font-medium leading-[1.08] tracking-tight text-balance sm:py-9 sm:text-5xl lg:text-6xl">
                   {question.promptMain}
                 </h2>
 
@@ -565,6 +663,7 @@ export function QuizScreen({
                     placeholder="type your answer…"
                     className={cn(
                       "h-14 rounded-xl px-4 text-center text-2xl transition-colors duration-300 md:text-2xl",
+                      "placeholder:font-display placeholder:italic placeholder:text-muted-foreground/60",
                       "focus-visible:ring-[2px]",
                       phase === "right" &&
                         "border-success bg-success/5 focus-visible:ring-success/30",

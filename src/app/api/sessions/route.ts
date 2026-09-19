@@ -208,7 +208,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [recent, aggregate] = await Promise.all([
+    const [recent, aggregate, paceRows] = await Promise.all([
       db.practiceSession.findMany({
         ...RECENT_COLUMNS,
         orderBy: { createdAt: "desc" },
@@ -220,7 +220,20 @@ export async function GET(request: Request) {
         _avg: { accuracy: true },
         _sum: { total: true },
       }),
+      // question-weighted average pace (ms/question) across ALL
+      // sessions — aggregate() can't do products, so sum them here
+      db.practiceSession.findMany({
+        select: { avgMsPerQuestion: true, total: true },
+      }),
     ]);
+
+    let weightedMs = 0;
+    let weightedTotal = 0;
+    for (const row of paceRows) {
+      if (row.total <= 0) continue;
+      weightedMs += Math.max(0, row.avgMsPerQuestion) * row.total;
+      weightedTotal += row.total;
+    }
 
     return NextResponse.json({
       recent,
@@ -233,6 +246,8 @@ export async function GET(request: Request) {
         bestStreak: aggregate._max.bestStreak ?? 0,
         avgAccuracy: aggregate._avg.accuracy ?? 0,
         totalQuestions: aggregate._sum.total ?? 0,
+        avgMsPerQuestion:
+          weightedTotal > 0 ? Math.round(weightedMs / weightedTotal) : null,
       },
     });
   } catch {

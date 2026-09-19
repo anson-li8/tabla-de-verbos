@@ -7,7 +7,7 @@
 // Rendered by Task 3-b's page inside a max-w-6xl container.
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { QuizScreen } from "./quiz-screen";
@@ -17,7 +17,7 @@ import {
   DEFAULT_SETTINGS,
   buildDrillSettings,
   fetchFocusStats,
-  fetchQuestion,
+  fetchQuestionDetailed,
   fetchSessions,
   sanitizeSettings,
   saveSession,
@@ -64,13 +64,22 @@ export default function PracticeMode({
   const [sessions, setSessions] = useState<SessionsResponse | null>(null);
   const [focusStats, setFocusStats] = useState<FocusStatsResponse | null>(null);
   const [sessionsLoading, setSessionsLoading] = useState(true);
+  // mirror of `sessions` on a ref — lets handleQuizEnd read the
+  // PRE-save stats (personal baseline) without stale-closure risk
+  const sessionsRef = useRef<SessionsResponse | null>(null);
 
   // session lifecycle
   const [sessionKey, setSessionKey] = useState(0);
   const [initialQuestion, setInitialQuestion] = useState<Question | null>(null);
+  /** true when the session's first question came from the local
+   *  (offline) generator rather than the API */
+  const [initialOffline, setInitialOffline] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState(false);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
+  /** personal pace baseline (ms/question) captured BEFORE the
+   *  just-finished session is saved — powers the pace insight */
+  const [baselineAvgMs, setBaselineAvgMs] = useState<number | null>(null);
 
   /** focused settings while a drill session is active */
   const [drill, setDrill] = useState<QuizSettings | null>(null);
@@ -115,6 +124,7 @@ export default function PracticeMode({
         fetchFocusStats().catch(() => null),
       ]);
       setSessions(sessionsRes);
+      sessionsRef.current = sessionsRes;
       setFocusStats(focusRes);
     } catch {
       // silent — records strip falls back to its empty state
@@ -144,8 +154,9 @@ export default function PracticeMode({
       if (clearDrillBefore) clearDrill();
       const active = override ?? drill ?? settings;
       try {
-        const q = await fetchQuestion(active);
-        setInitialQuestion(q);
+        const { question, offline } = await fetchQuestionDetailed(active);
+        setInitialQuestion(question);
+        setInitialOffline(offline);
         setSessionKey((k) => k + 1);
         setScreen("quiz");
       } catch {
@@ -217,9 +228,18 @@ export default function PracticeMode({
   }, [quizVerb]);
 
   // quiz finished with at least one answered question:
+  // capture the personal pace baseline from the PRE-save stats,
   // save the session, then show the results
   const handleQuizEnd = useCallback(
     async (s: SessionSummary) => {
+      const prior = sessionsRef.current?.stats ?? null;
+      // baseline needs a meaningful history: ≥ 2 prior sessions and
+      // ≥ 10 prior questions — otherwise the comparison is noise
+      setBaselineAvgMs(
+        prior && prior.totalSessions >= 2 && prior.totalQuestions >= 10
+          ? prior.avgMsPerQuestion
+          : null
+      );
       try {
         await saveSession(s);
       } catch {
@@ -266,6 +286,7 @@ export default function PracticeMode({
             <QuizScreen
               key={sessionKey}
               initialQuestion={initialQuestion}
+              initialOffline={initialOffline}
               settings={drill ?? settings}
               drillLabel={drillLabel}
               onEnd={(s) => void handleQuizEnd(s)}
@@ -281,6 +302,7 @@ export default function PracticeMode({
               sessions={sessions}
               sessionsLoading={sessionsLoading}
               drillShort={drillShort}
+              baselineAvgMs={baselineAvgMs}
               onPracticeAgain={() => void startSession()}
               onDrillMisses={handleDrillMisses}
               onVerbDrill={startVerbDrill}
