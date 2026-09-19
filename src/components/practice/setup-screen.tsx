@@ -29,6 +29,7 @@ import {
 import { ROW_META, type RowKey } from "@/lib/conjugator/types";
 import { cn } from "@/lib/utils";
 
+import { FocusPanel } from "./focus-panel";
 import { RecordsStrip } from "./records-strip";
 import {
   CORE_TENSES,
@@ -36,6 +37,7 @@ import {
   MICRO,
   PRACTICE_TENSES,
   VERB_COUNTS,
+  type FocusStatsResponse,
   type QuestionKind,
   type QuizSettings,
   type SessionsResponse,
@@ -101,6 +103,10 @@ interface SetupScreenProps {
   startError: boolean;
   sessions: SessionsResponse | null;
   sessionsLoading: boolean;
+  /** focus analytics (trend / toughest verbs / recent misses) */
+  focusStats: FocusStatsResponse | null;
+  /** start a focused drill built from the recent miss bank */
+  onDrillMisses: () => void;
 }
 
 export function SetupScreen({
@@ -111,6 +117,8 @@ export function SetupScreen({
   startError,
   sessions,
   sessionsLoading,
+  focusStats,
+  onDrillMisses,
 }: SetupScreenProps) {
   const toggleType = (kind: QuestionKind) => {
     const types = settings.types.includes(kind)
@@ -153,6 +161,15 @@ export function SetupScreen({
         <h2 className={cn(MICRO, "mb-3")}>your records</h2>
         <RecordsStrip data={sessions} loading={sessionsLoading} />
       </section>
+
+      {/* focus analytics + miss-drill quick start (self-hiding
+          until the first session exists) */}
+      <FocusPanel
+        stats={focusStats}
+        loading={sessionsLoading}
+        drillLoading={starting}
+        onDrillMisses={onDrillMisses}
+      />
 
       {/* session builder */}
       <motion.div variants={listVariants} initial="hidden" animate="show">

@@ -16,10 +16,12 @@ import { SetupScreen } from "./setup-screen";
 import {
   DEFAULT_SETTINGS,
   buildDrillSettings,
+  fetchFocusStats,
   fetchQuestion,
   fetchSessions,
   sanitizeSettings,
   saveSession,
+  type FocusStatsResponse,
   type MissRecord,
   type Question,
   type QuizSettings,
@@ -45,8 +47,10 @@ export default function PracticeMode() {
   const [settings, setSettings] = useState<QuizSettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  // records / recent sessions (GET /api/sessions)
+  // records / recent sessions (GET /api/sessions) + focus
+  // analytics (GET /api/sessions/stats) — refreshed together
   const [sessions, setSessions] = useState<SessionsResponse | null>(null);
+  const [focusStats, setFocusStats] = useState<FocusStatsResponse | null>(null);
   const [sessionsLoading, setSessionsLoading] = useState(true);
 
   // session lifecycle
@@ -82,7 +86,14 @@ export default function PracticeMode() {
 
   const refreshSessions = useCallback(async () => {
     try {
-      setSessions(await fetchSessions());
+      // focus stats are a nice-to-have — never let their failure
+      // take the records strip down with them
+      const [sessionsRes, focusRes] = await Promise.all([
+        fetchSessions(),
+        fetchFocusStats().catch(() => null),
+      ]);
+      setSessions(sessionsRes);
+      setFocusStats(focusRes);
     } catch {
       // silent — records strip falls back to its empty state
     } finally {
@@ -170,6 +181,10 @@ export default function PracticeMode() {
               startError={startError}
               sessions={sessions}
               sessionsLoading={sessionsLoading}
+              focusStats={focusStats}
+              onDrillMisses={() =>
+                handleDrillMisses(focusStats?.recentMisses ?? [])
+              }
             />
           </motion.div>
         )}

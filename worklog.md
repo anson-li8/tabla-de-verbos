@@ -198,3 +198,39 @@ Task: Continuous improvement round 1 — QA, miss-drill feature, verb profile, k
 - Turbopack stale-CSS gremlin (procedure above) — any future globals.css edit MUST verify the served chunk, not just restart.
 - Next-round candidate features (in priority order): (1) setup-screen "drill recent misses" quick-start fed by a misses-inclusive GET /api/sessions variant or aggregate misses endpoint; (2) progress sparkline/heatmap of accuracy over time on the results/setup screens; (3) per-verb mastery stats (hardest verbs leaderboard); (4) print/share results card; (5) verb-of-the-day on Tables landing.
 - Minor polish backlog: records→question-types section gap could tighten; italic meanings baseline micro-offset in perfil strip (negligible).
+
+---
+Task ID: 8 (cron review round 2)
+Agent: cron-webDevReview
+Task: Continuous improvement round 2 — status assessment, QA, miss-bank analytics (focus panel + drill quick-start), verb of the day, styling polish
+
+## Current project status / assessment
+- App fully stable at round start: both modes browser-verified end-to-end (rounds 1–7), engine PASS 13397/13397 (NOTE: round-1 worklog's "13398" was a typo — the script is git-unchanged since commit 7a9eea4 and its true stable count is 13397; engine + verify script untouched this round), lint clean, tsc clean, dev server healthy on :3000, DB empty (0 sessions).
+- Round-2 QA pass found NO bugs: Tables chart + check/reveal/random flows, Practice setup → quiz (all 3 question kinds, correct/wrong/skip feedback, accent keys) → end-session dialog → results → drill-these-misses all work; localStorage persistence intact; no console/page errors; APIs all 200.
+- Test data seeded during QA (1 session w/ 3 misses) then cleaned back to fresh first-run state (0 sessions) at round end.
+
+## Goals / completed modifications / verification results
+1. FEATURE — miss-bank analytics endpoint `GET /api/sessions/stats` (new route src/app/api/sessions/stats/route.ts):
+   - Returns: `trend` (last 14 sessions oldest→newest: accuracy/score/total/mode/createdAt), `trendDelta` (recent-half − older-half accuracy in pts, null < 4 sessions), `hardestVerbs` (top 8 by miss count across last 100 sessions w/ lastMissedAt — first-seen wins because rows iterate newest-first), `recentMisses` (≤ 30 chronological misses from last 15 sessions), `totals`.
+   - Safe JSON parse of the misses column (bad rows skipped); consistent { error } 500 shape; force-dynamic.
+   - curl-verified against live data (1 session: trend 1 pt, trendDelta null, 3 hardest verbs, 3 recentMisses, totals {1,3}); later re-verified with 2 and 3 sessions (trend grew correctly).
+2. FEATURE — FocusPanel on Practice setup (new src/components/practice/focus-panel.tsx, wired via practice-mode + setup-screen):
+   - Animated SVG accuracy sparkline: draw-in line (motion.path pathLength), staggered dot pop-in, low-opacity area fill, dashed 50% midline (only with >1 pt), date-range caption, single-point renders as lone dot; aria-label describes current accuracy; pluralized "last N session(s)".
+   - Trend badge: improving +X pts (success) / steady (muted) / slipping −X pts (destructive) at ±5 pt thresholds.
+   - "toughest verbs" chips (top 6, ×count, #1 destructive-tinted, title = last missed timeAgo) with "no misses on record — ¡impecable!" empty branch.
+   - "drill my misses · N verbs · infinite" quick-start → reuses handleDrillMisses(focusStats.recentMisses) → buildDrillSettings; graceful "every recent answer was correct — nothing to drill" note when recentMisses is empty.
+   - Skeleton loading state (role=status); hidden entirely while no sessions exist (records strip owns the empty state).
+   - practice-mode: fetches sessions + focus stats in one Promise.all (focus failure degrades to null without killing records); both refreshed after every session end.
+   - Browser-verified end-to-end: panel renders → drill quick-start launches "MISS DRILL · 3 VERBS" session → all questions stayed in the missed pool {despedir, tener, elegir} → results → back to setup → panel refreshed with new trend point.
+3. FEATURE — verb of the day on Tables landing (new src/components/tables/verb-of-day.tsx):
+   - Deterministic daily pick (local-midnight day index % 52 — full catalogue cycle every 52 days); warm saffron gradient strip + oversized watermark of the verb's first 3 letters; Sunrise badge; date caption; gloss; 3 live "yo" teaser forms (presente/pretérito/futuro) computed client-side via shared engine conjugateOne (try/catch-guarded).
+   - "study this verb" button loads it into the chart (reuses handleVerbChange → clears answers); flips to disabled "on the chart" state when current. Browser-verified (caer loaded, combobox + profile strip updated).
+4. STYLING — records strip cards micro-lift (hover:-translate-y-0.5 + transition-all); verb-of-day breathing room (py-4, gap-y-3.5); both new surfaces follow the warm editorial system (Fraunces/mono micro-labels, warm tokens, no blue/indigo).
+5. QA — agent-browser full pass over both new features + VLM design reviews: verb-of-day "fits the aesthetic perfectly… like a highlighted section of a physical notebook"; focus card "a high-quality addition that respects the app's design system"; sparkline "renders cleanly" in light AND dark; mobile 390px "wraps/stacks gracefully", no horizontal overflow in either mode; ≥44px targets maintained. Fixed during QA: JSX comment missing closing brace (build error, caught + fixed immediately), "last 1 sessions" pluralization, midline hidden for single-point trend.
+6. Final state: lint clean, tsc clean (src/), engine PASS 13397/13397, all APIs 200, no browser errors, DB cleaned to 0 sessions (fresh first-run), light theme restored, dev.log clean (only the transient fixed build error in history).
+
+## Unresolved issues / risks / next-round priorities
+- Deviation note: MultiEdit tool proved non-atomic this round (a failed multi-edit left partial edits + mangled a JSX comment "{/* … */" → build error). Future agents: after ANY failed MultiEdit, re-read the file before retrying, and check dev.log for parse errors.
+- Next-round candidate features (priority order): (1) shareable/printable results card (canvas render of the session summary); (2) per-tense accuracy breakdown on results (needs per-question tense tally — could extend SessionSummary.misses or a new analytics field); (3) streak calendar/heatmap (needs daily aggregates from sessions table); (4) practice "daily goal" (e.g. 20 questions/day with progress); (5) verb-of-the-day could link into Practice ("quiz me on caer").
+- Minor polish backlog: focus sparkline could gain hover tooltips per point (currently static); toughest-verb chips could be clickable to drill that single verb; records→focus→builder vertical rhythm is good but focus card could get bg-dotted on wide screens for texture parity.
+- Utility scripts added for future QA rounds: scripts/check-db.ts (dump sessions w/ miss verbs), scripts/clean-sessions.ts (deleteMany) — safe to reuse.

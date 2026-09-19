@@ -84,7 +84,7 @@ export function RecordsStrip({ data, loading }: RecordsStripProps) {
       {cards.map(({ Icon, label, value }) => (
         <div
           key={label}
-          className="rounded-xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
+          className="rounded-xl border bg-card p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
         >
           <div className="flex items-center gap-1.5">
             <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />

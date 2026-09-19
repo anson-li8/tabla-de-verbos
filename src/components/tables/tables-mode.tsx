@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 
 import { ConjugationChart } from "./conjugation-chart";
 import { SubjectPicker } from "./subject-picker";
+import { VerbOfDay } from "./verb-of-day";
 import type {
   AnswersMap,
   CellLang,
@@ -289,6 +290,9 @@ export default function TablesMode() {
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
+      {/* ── verb of the day spotlight ── */}
+      <VerbOfDay current={verb} onPick={handleVerbChange} />
+
       {/* ── controls ── */}
       <Card className="bg-dotted gap-0 p-4 sm:p-6">
         <div className="flex flex-wrap items-end gap-x-6 gap-y-4">

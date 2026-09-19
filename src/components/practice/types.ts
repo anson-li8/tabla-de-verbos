@@ -90,6 +90,36 @@ export interface SessionsResponse {
   stats: SessionStats;
 }
 
+// ── Focus analytics (GET /api/sessions/stats) ───────────────
+
+/** one point of the accuracy trend (a finished session) */
+export interface FocusTrendPoint {
+  accuracy: number;
+  score: number;
+  total: number;
+  mode: SessionMode;
+  createdAt: string;
+}
+
+/** a verb that has been missed, ranked by frequency */
+export interface HardestVerb {
+  verb: string;
+  count: number;
+  lastMissedAt: string;
+}
+
+export interface FocusStatsResponse {
+  /** last 14 sessions, oldest → newest */
+  trend: FocusTrendPoint[];
+  /** recent-half minus older-half accuracy in points (null < 4 sessions) */
+  trendDelta: number | null;
+  /** top verbs by miss count */
+  hardestVerbs: HardestVerb[];
+  /** ≤ 30 most recent misses (chronological) — feeds the drill quick-start */
+  recentMisses: MissRecord[];
+  totals: { sessions: number; missCount: number };
+}
+
 // ── Constants ────────────────────────────────────────────────
 
 /** the app's signature micro-label style (mono uppercase) */
@@ -297,6 +327,27 @@ export async function fetchSessions(): Promise<SessionsResponse> {
   const data = (await res.json()) as SessionsResponse;
   if (!data || !Array.isArray(data.recent) || !data.stats) {
     throw new Error("malformed sessions response");
+  }
+  return data;
+}
+
+/** GET /api/sessions/stats → focus analytics (trend, hardest verbs, misses) */
+export async function fetchFocusStats(): Promise<FocusStatsResponse> {
+  const res = await fetch("/api/sessions/stats", {
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    throw new Error(`/api/sessions/stats failed with ${res.status}`);
+  }
+  const data = (await res.json()) as FocusStatsResponse;
+  if (
+    !data ||
+    !Array.isArray(data.trend) ||
+    !Array.isArray(data.hardestVerbs) ||
+    !Array.isArray(data.recentMisses) ||
+    !data.totals
+  ) {
+    throw new Error("malformed focus stats response");
   }
   return data;
 }
