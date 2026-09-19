@@ -23,6 +23,8 @@ export interface QuizSettings {
   level: Level;
   mode: SessionMode;
   durationSec: number;
+  /** explicit verb pool for miss-drills — overrides level when non-empty */
+  verbs?: string[];
 }
 
 export interface Question {
@@ -160,6 +162,42 @@ export function sanitizeSettings(raw: unknown): QuizSettings {
     durationSec: DURATION_OPTIONS.includes(r.durationSec as number)
       ? (r.durationSec as number)
       : DEFAULT_SETTINGS.durationSec,
+  };
+}
+
+/**
+ * Build a focused drill from a session's misses: unique verbs (≤12) and the
+ * tenses/kinds that were actually missed. Falls back to null when the misses
+ * carry no usable verbs (shouldn't happen — misses always store the verb).
+ */
+export function buildDrillSettings(
+  misses: MissRecord[],
+  base: QuizSettings
+): QuizSettings | null {
+  const verbs = [
+    ...new Set(
+      misses
+        .map((m) => m.verb)
+        .filter((v) => typeof v === "string" && ALL_VERBS.includes(v))
+    ),
+  ].slice(0, 12);
+  if (verbs.length === 0) return null;
+  const tenses = [
+    ...new Set(
+      misses
+        .map((m) => m.tense as RowKey)
+        .filter((t) => (PRACTICE_TENSES as string[]).includes(t as string))
+    ),
+  ];
+  const kinds = [
+    ...new Set(misses.map((m) => m.kind).filter((k) => KIND_VALUES.includes(k))),
+  ] as QuestionKind[];
+  return {
+    ...base,
+    verbs,
+    tenses: tenses.length > 0 ? tenses : base.tenses,
+    types: kinds.length > 0 ? kinds : base.types,
+    mode: "infinite",
   };
 }
 

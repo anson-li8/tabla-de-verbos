@@ -2,7 +2,9 @@
 // POST /api/practice/question — one random practice question
 // Body (QuizSettings, all fields optional):
 //   { types?: QuestionKind[], tenses?: RowKey[], level?: 5|6|"all",
-//     mode?: "timed"|"infinite", durationSec?: number }
+//     mode?: "timed"|"infinite", durationSec?: number,
+//     verbs?: string[] — optional explicit verb pool ("drill my misses"),
+//                        unknown verbs filtered, overrides level when non-empty }
 // Defaults: types ["conjugation"], tenses ["pres"], level "all",
 //           mode "infinite", durationSec 120.
 // Unknown types/tenses are filtered out; if either list ends up
@@ -36,6 +38,7 @@ const bodySchema = z.object({
   level: z.union([z.literal(5), z.literal(6), z.literal("all")]).optional(),
   mode: z.enum(["timed", "infinite"]).optional(),
   durationSec: z.number().int().min(1).max(86400).optional(),
+  verbs: z.array(z.string()).max(60).optional(),
 });
 
 export async function POST(request: Request) {
@@ -90,6 +93,7 @@ export async function POST(request: Request) {
     level: parsed.data.level ?? "all",
     mode: parsed.data.mode ?? "infinite",
     durationSec: parsed.data.durationSec ?? 120,
+    verbs: parsed.data.verbs,
   };
 
   try {

@@ -15,10 +15,12 @@ import { ResultsScreen } from "./results-screen";
 import { SetupScreen } from "./setup-screen";
 import {
   DEFAULT_SETTINGS,
+  buildDrillSettings,
   fetchQuestion,
   fetchSessions,
   sanitizeSettings,
   saveSession,
+  type MissRecord,
   type Question,
   type QuizSettings,
   type SessionSummary,
@@ -53,6 +55,9 @@ export default function PracticeMode() {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState(false);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
+
+  /** focused settings while a "drill my misses" session is active */
+  const [drill, setDrill] = useState<QuizSettings | null>(null);
 
   // hydrate persisted settings
   useEffect(() => {
@@ -91,26 +96,44 @@ export default function PracticeMode() {
 
   const handleSettingsChange = (next: QuizSettings) => {
     setSettings(next);
+    setDrill(null);
     setStartError(false);
   };
 
-  // fetch the first question (Start / practice again) — the quiz
-  // prefetches everything after it
-  const startSession = useCallback(async () => {
-    if (starting) return;
-    setStarting(true);
-    setStartError(false);
-    try {
-      const q = await fetchQuestion(settings);
-      setInitialQuestion(q);
-      setSessionKey((k) => k + 1);
-      setScreen("quiz");
-    } catch {
-      setStartError(true);
-    } finally {
-      setStarting(false);
-    }
-  }, [settings, starting]);
+  // fetch the first question (Start / practice again / miss drill) — the
+  // quiz prefetches everything after it. `override` replaces the settings
+  // for this session; `clearDrill` drops a previously active drill.
+  const startSession = useCallback(
+    async (override?: QuizSettings, clearDrill = false) => {
+      if (starting) return;
+      setStarting(true);
+      setStartError(false);
+      if (clearDrill) setDrill(null);
+      const active = override ?? drill ?? settings;
+      try {
+        const q = await fetchQuestion(active);
+        setInitialQuestion(q);
+        setSessionKey((k) => k + 1);
+        setScreen("quiz");
+      } catch {
+        setStartError(true);
+      } finally {
+        setStarting(false);
+      }
+    },
+    [settings, drill, starting]
+  );
+
+  // "drill these misses" — focused infinite session on the missed verbs
+  const handleDrillMisses = useCallback(
+    (misses: MissRecord[]) => {
+      const drillSettings = buildDrillSettings(misses, settings);
+      if (!drillSettings) return;
+      setDrill(drillSettings);
+      void startSession(drillSettings);
+    },
+    [settings, startSession]
+  );
 
   // quiz finished with at least one answered question:
   // save the session, then show the results
@@ -142,7 +165,7 @@ export default function PracticeMode() {
             <SetupScreen
               settings={settings}
               onChange={handleSettingsChange}
-              onStart={() => void startSession()}
+              onStart={() => void startSession(undefined, true)}
               starting={starting}
               startError={startError}
               sessions={sessions}
@@ -156,7 +179,7 @@ export default function PracticeMode() {
             <QuizScreen
               key={sessionKey}
               initialQuestion={initialQuestion}
-              settings={settings}
+              settings={drill ?? settings}
               onEnd={(s) => void handleQuizEnd(s)}
               onEmptyEnd={handleEmptyEnd}
             />
@@ -169,7 +192,9 @@ export default function PracticeMode() {
               summary={summary}
               sessions={sessions}
               sessionsLoading={sessionsLoading}
+              wasDrill={!!drill}
               onPracticeAgain={() => void startSession()}
+              onDrillMisses={handleDrillMisses}
               onChangeSettings={() => setScreen("setup")}
               againLoading={starting}
             />

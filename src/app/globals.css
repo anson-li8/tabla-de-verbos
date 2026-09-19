@@ -106,7 +106,7 @@
   --secondary: oklch(0.265 0.014 60);
   --secondary-foreground: oklch(0.9 0.01 80);
   --muted: oklch(0.25 0.012 60);
-  --muted-foreground: oklch(0.68 0.014 70);
+  --muted-foreground: oklch(0.72 0.014 70);
   --accent: oklch(0.31 0.055 75);
   --accent-foreground: oklch(0.88 0.06 80);
   --destructive: oklch(0.65 0.19 25);
@@ -143,6 +143,16 @@
   ::selection {
     background: color-mix(in oklch, var(--primary) 22%, transparent);
   }
+}
+
+/* dark mode: keep the "paper" feel — a faint grain of warm dots */
+html.dark body {
+  background-image: radial-gradient(
+    color-mix(in oklch, var(--foreground) 4.5%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 26px 26px;
+  background-attachment: fixed;
 }
 
 /* ruled language-workbook paper */

@@ -29,10 +29,23 @@ export function RecordsStrip({ data, loading }: RecordsStripProps) {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-hidden="true">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-[86px] rounded-xl" />
-        ))}
+      <div
+        className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+        role="status"
+        aria-label="loading your records"
+      >
+        {["best accuracy", "best score", "longest streak", "sessions"].map(
+          (label) => (
+            <div
+              key={label}
+              className="rounded-xl border bg-card p-4 shadow-sm"
+              aria-hidden="true"
+            >
+              <p className={MICRO}>{label}</p>
+              <Skeleton className="mt-2.5 h-7 w-14" />
+            </div>
+          )
+        )}
       </div>
     );
   }

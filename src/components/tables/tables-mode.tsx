@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion, useAnimationControls } from "framer-motion";
-import { CircleCheck, Dices, Eraser, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Check, Dices, Eraser, Eye, EyeOff, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -36,6 +36,7 @@ import type {
   VerdictsMap,
 } from "./types";
 import { VerbPicker } from "./verb-picker";
+import { VerbProfile } from "./verb-profile";
 
 const STORAGE_KEY = "tdv-tables";
 const LEVEL_OPTIONS = ["all", 5, 6] as const;
@@ -349,7 +350,7 @@ export default function TablesMode() {
                         aria-hidden="true"
                       />
                     ) : (
-                      <CircleCheck className="size-4" aria-hidden="true" />
+                      <Check className="size-4" aria-hidden="true" />
                     )}
                     check
                   </Button>
@@ -401,6 +402,9 @@ export default function TablesMode() {
           </div>
         </div>
       </Card>
+
+      {/* ── verb profile strip ── */}
+      <VerbProfile verb={verb} />
 
       {/* ── the chart ── */}
       <ConjugationChart

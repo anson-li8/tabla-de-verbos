@@ -14,6 +14,7 @@ import {
   Play,
   Settings2,
   Sparkles,
+  Target,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,10 @@ interface ResultsScreenProps {
   summary: SessionSummary;
   sessions: SessionsResponse | null;
   sessionsLoading: boolean;
+  /** true when this session was a focused miss-drill */
+  wasDrill: boolean;
   onPracticeAgain: () => void;
+  onDrillMisses: (misses: MissRecord[]) => void;
   onChangeSettings: () => void;
   againLoading: boolean;
 }
@@ -48,7 +52,9 @@ export function ResultsScreen({
   summary,
   sessions,
   sessionsLoading,
+  wasDrill,
   onPracticeAgain,
+  onDrillMisses,
   onChangeSettings,
   againLoading,
 }: ResultsScreenProps) {
@@ -89,7 +95,10 @@ export function ResultsScreen({
     }
   }, [summary]);
 
-  const modeLine = `${summary.mode === "timed" ? "timed" : "infinite"} · ${formatDuration(summary.durationSec)}`;
+  const modeLine = `${
+    wasDrill ? "miss drill" : summary.mode === "timed" ? "timed" : "infinite"
+  } · ${formatDuration(summary.durationSec)}`;
+  const drillVerbCount = new Set(summary.misses.map((m) => m.verb)).size;
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-8">
@@ -190,19 +199,50 @@ export function ResultsScreen({
         transition={{ duration: 0.45, delay: 0.16, ease: "easeOut" }}
         className="flex flex-col gap-3 sm:flex-row"
       >
-        <Button
-          size="lg"
-          className="h-14 flex-1 gap-2.5 rounded-xl text-base font-semibold"
-          onClick={onPracticeAgain}
-          disabled={againLoading}
-        >
-          {againLoading ? (
-            <Loader2 className="size-5 animate-spin" aria-hidden="true" />
-          ) : (
-            <Play className="size-5" aria-hidden="true" />
-          )}
-          practice again
-        </Button>
+        {summary.misses.length > 0 ? (
+          <>
+            <Button
+              size="lg"
+              className="h-14 flex-1 gap-2.5 rounded-xl text-base font-semibold"
+              onClick={() => onDrillMisses(summary.misses)}
+              disabled={againLoading}
+            >
+              <Target className="size-5" aria-hidden="true" />
+              drill these misses
+              <span className="font-mono text-xs font-normal opacity-75">
+                {drillVerbCount} verb{drillVerbCount === 1 ? "" : "s"}
+              </span>
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-14 gap-2.5 rounded-xl px-8 text-base"
+              onClick={onPracticeAgain}
+              disabled={againLoading}
+            >
+              {againLoading ? (
+                <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Play className="size-5" aria-hidden="true" />
+              )}
+              practice again
+            </Button>
+          </>
+        ) : (
+          <Button
+            size="lg"
+            className="h-14 flex-1 gap-2.5 rounded-xl text-base font-semibold"
+            onClick={onPracticeAgain}
+            disabled={againLoading}
+          >
+            {againLoading ? (
+              <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Play className="size-5" aria-hidden="true" />
+            )}
+            practice again
+          </Button>
+        )}
         <Button
           size="lg"
           variant="outline"

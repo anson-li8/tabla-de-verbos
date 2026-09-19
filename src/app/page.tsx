@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { LogoMark } from "@/components/app/logo-mark";
@@ -16,6 +16,32 @@ import {
 
 export default function Home() {
   const [mode, setMode] = useState<AppMode>("tables");
+
+  // keyboard shortcuts: 1 / 2 (or T / P) jump between modes — ignored while
+  // typing in an input, using modifiers, or when a dialog is open
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (document.querySelector("[role=alertdialog][data-state=open]")) {
+        return;
+      }
+      const key = e.key.toLowerCase();
+      if (key === "1" || key === "t") setMode("tables");
+      else if (key === "2" || key === "p") setMode("practice");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -59,7 +85,10 @@ export default function Home() {
             {ALL_VERBS.length} verbs · {TENSE_ROWS.length} forms ·{" "}
             {SUBJECTS.length} subjects
           </p>
-          <p>enter to advance · accents count</p>
+          <p>
+            <span className="hidden sm:inline">press 1 / 2 to switch modes · </span>
+            enter to advance · accents count
+          </p>
         </div>
       </footer>
     </div>

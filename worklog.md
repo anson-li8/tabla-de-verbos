@@ -170,3 +170,31 @@ Work Log:
 
 Stage Summary:
 - Continuous improvement loop armed.
+
+---
+Task ID: 7 (cron review round 1)
+Agent: cron-webDevReview
+Task: Continuous improvement round 1 — QA, miss-drill feature, verb profile, keyboard shortcuts, styling polish
+
+## Current project status / assessment
+- App fully functional and browser-verified (both modes, all question kinds, timed/infinite, persistence, dark mode, responsive). Engine 13398/13398 assertions, lint clean, tsc clean, APIs healthy, DB clean (0 sessions at round start).
+- Dev server on :3000 healthy. NOTE: Turbopack's dev CSS cache goes stale after globals.css edits — a plain restart is NOT always enough. Reliable refresh procedure (used twice this round): `pkill -f "next dev"; sleep 2; rm -rf .next/dev; (setsid bun run dev > /dev/null 2>&1 < /dev/null &)` then wait ~12s. Verify by grepping the served CSS chunk for your change. (Gotcha: don't misread lab() fallback values as stale — oklab L ≈ 0.93 × lab L.)
+
+## Goals / completed modifications / verification results
+1. FEATURE — "drill my misses": focused infinite practice session on the verbs/tenses/kinds you just missed.
+   - quiz.ts: QuizSettings gains optional `verbs: string[]` (overrides level pool, unknown verbs filtered, falls back to level when empty). Verified: 6/6 questions from a [hablar,tener] pool; bogus list falls back.
+   - /api/practice/question: accepts + zod-validates verbs (≤60).
+   - practice/types.ts: buildDrillSettings(misses, base) — unique missed verbs (≤12), missed tenses/kinds, forced infinite mode; not persisted to localStorage (stripped by sanitizeSettings).
+   - practice-mode.tsx: `drill` state; startSession(override?, clearDrill?); SetupScreen start clears drill (BUG FOUND & FIXED in QA: onStart originally didn't pass clearDrill → drill leaked into normal sessions); "practice again" repeats the active drill; "change settings" returns to setup.
+   - results-screen.tsx: "drill these misses · N verbs" primary button (Target icon) when misses exist; modeLine shows "miss drill · mm:ss"; quiz-screen shows saffron "miss drill · N verbs" chip on every question.
+   - Browser-verified end-to-end: 3 wrong answers → results → drill starts with chip → questions stay in pool (estar/entender/caber) → end → "miss drill" mode line → practice again repeats drill → change settings → new session clean.
+2. FEATURE — verb profile strip (Tables mode): new src/components/tables/verb-profile.tsx — classification chips derived from VERBS attrs (-ar/-er/-ir, reflexive, stem e→ie/e→i/o→ue, irregular yo/boot/present/imperfect/preterite/future/gerund/participle/subjunctive/command/nos, green "regular" chip when fully regular) + deduped English meanings in italic Fraunces. Wired into tables-mode between controls and chart. Verified for tener (yo → teng-o, preterite: tuve…, future: tendr-) and dedup fix for tener's double "to have".
+3. FEATURE — keyboard shortcuts: 1/2 (or t/p) switch modes; ignored while typing in inputs/textareas/selects/contentEditable, with modifiers, or when an AlertDialog is open. Footer hint "press 1 / 2 to switch modes" (desktop only). Verified both directions.
+4. STYLING — (a) records strip skeletons now labeled (best accuracy/best score/longest streak/sessions + role=status "loading your records"); (b) quiz answer input focus ring softened (2px, phase-tinted — was a 3px default ring that read as a double border); (c) dark-mode paper grain: faint 26px warm dot grid on body (html.dark body, fixed attachment), light mode stays clean cream — verified both; (d) CHECK button icon CircleCheck → Check (VLM read the circle-check as a smiley); (e) dark --muted-foreground 0.68 → 0.72 for stronger secondary-text contrast.
+5. QA — agent-browser pass over all of the above + VLM design review of the new surfaces. VLM false positives checked & dismissed (tense chips do NOT overflow — verified bounding boxes + no doc overflow at 390px; dark "all" chip contrast measured ~6.4:1, passes AA). VLM positives fixed (icon, skeletons). VLM praised perfil strip ("very clean, well-aligned") and dark grain ("excellent depth without being distracting").
+6. Final state: verify-engine PASS 13398/13398, lint clean, tsc clean, no browser console/page errors, all APIs 200, QA test sessions cleaned from DB (0 rows), light + dark verified, dev.log clean.
+
+## Unresolved issues / risks / next-round priorities
+- Turbopack stale-CSS gremlin (procedure above) — any future globals.css edit MUST verify the served chunk, not just restart.
+- Next-round candidate features (in priority order): (1) setup-screen "drill recent misses" quick-start fed by a misses-inclusive GET /api/sessions variant or aggregate misses endpoint; (2) progress sparkline/heatmap of accuracy over time on the results/setup screens; (3) per-verb mastery stats (hardest verbs leaderboard); (4) print/share results card; (5) verb-of-the-day on Tables landing.
+- Minor polish backlog: records→question-types section gap could tighten; italic meanings baseline micro-offset in perfil strip (negligible).

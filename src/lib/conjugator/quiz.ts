@@ -23,6 +23,12 @@ export interface QuizSettings {
   level: 5 | 6 | "all";
   mode: "timed" | "infinite";
   durationSec: number;
+  /**
+   * Optional explicit verb pool (e.g. "drill my misses"). When given and
+   * non-empty it overrides `level`; unknown verbs are filtered out and the
+   * pool silently falls back to `level` if nothing valid remains.
+   */
+  verbs?: string[];
 }
 
 export interface Question {
@@ -249,7 +255,11 @@ export function generateQuestion(settings: QuizSettings): Question {
     );
   }
 
-  const pool = getVerbPool(settings.level ?? "all");
+  let pool = getVerbPool(settings.level ?? "all");
+  if (settings.verbs && settings.verbs.length > 0) {
+    const explicit = dedup(settings.verbs.filter((v) => ALL_VERBS.includes(v)));
+    if (explicit.length > 0) pool = explicit;
+  }
   if (pool.length === 0) {
     throw new Error("generateQuestion: verb pool is empty");
   }

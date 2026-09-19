@@ -495,6 +495,11 @@ export function QuizScreen({
               <Card className="gap-0 rounded-2xl p-5 shadow-sm sm:p-8">
                 {/* chips + kind icon */}
                 <div className="flex flex-wrap items-center justify-center gap-2">
+                  {settings.verbs && settings.verbs.length > 0 && (
+                    <span className="rounded-full border border-accent bg-accent px-3 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-accent-foreground sm:text-xs">
+                      miss drill · {settings.verbs.length} verbs
+                    </span>
+                  )}
                   <KindIcon kind={question.kind} />
                   {chipsFor(question).map((chip) => (
                     <span
@@ -531,12 +536,13 @@ export function QuizScreen({
                     placeholder="type your answer…"
                     className={cn(
                       "h-14 rounded-xl px-4 text-center text-2xl transition-colors duration-300 md:text-2xl",
+                      "focus-visible:ring-[2px]",
                       phase === "right" &&
-                        "border-success bg-success/5 focus-visible:ring-success/25",
+                        "border-success bg-success/5 focus-visible:ring-success/30",
                       phase === "accent" &&
-                        "border-warn bg-warn/5 focus-visible:ring-warn/25",
+                        "border-warn bg-warn/5 focus-visible:ring-warn/30",
                       phase === "wrong" &&
-                        "border-destructive bg-destructive/5 focus-visible:ring-destructive/25"
+                        "border-destructive bg-destructive/5 focus-visible:ring-destructive/30"
                     )}
                   />
                   <Button
