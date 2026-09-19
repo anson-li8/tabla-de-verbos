@@ -39,6 +39,7 @@ const bodySchema = z.object({
   mode: z.enum(["timed", "infinite"]).optional(),
   durationSec: z.number().int().min(1).max(86400).optional(),
   verbs: z.array(z.string()).max(60).optional(),
+  subjects: z.array(z.string()).optional(),
 });
 
 export async function POST(request: Request) {
@@ -94,6 +95,7 @@ export async function POST(request: Request) {
     mode: parsed.data.mode ?? "infinite",
     durationSec: parsed.data.durationSec ?? 120,
     verbs: parsed.data.verbs,
+    subjects: parsed.data.subjects as QuizSettings["subjects"],
   };
 
   try {

@@ -525,3 +525,42 @@ Task: Continuous improvement round 9 — status assessment, QA, hydration bug fi
 - Freezes are PERMANENT bridges in streak math but claims are rate-limited to 1/week — a user who stops for 2+ days cannot bridge (by design); the offer UI only appears for exactly-one-missed-day.
 - Next-round candidate features (priority): (1) flashcards "star/leech" marking — flag forms that need extra review and a "review starred" deck (pure localStorage); (2) per-card self-grade ("lo sabía / no lo sabía") feeding a spaced-repetition-lite ordering; (3) cross-mode handoff — "study this verb in cards" from Tables/chart + verb-of-day; (4) share card QR/public profile (needs endpoint — still blocked on single-user); (5) VLM visual review was NOT run this round (rounds 7-9 all fell back to DOM verification — retry when credentials exist).
 - QA artifacts: /home/z/my-project/qa/r9-*.png (8 files). Utility: scripts/seed-freeze-scenario.ts (seeds day-2/3/4 sessions for freeze-offer QA — clean-sessions + deleteMany StreakFreeze after use).
+
+---
+Task ID: r10
+Agent: main-orchestrator (direct)
+Task: User-requested round — (1) add vosotros as a chart subject, (2) fix horizontal lines cutting through the verb-table cells, (3) keep improving UI ease-of-use without removing key features.
+
+Work Log:
+1. VOSOTROS SUBJECT (engine + data):
+   - types.ts: SubjectKey += "vosotros"; SUBJECTS/…KEYS/…INDEX add vosotros at index 5 (LAST — keeps legacy 5-entry arrays backward-compatible); ir's specialForms.imp extended to ["iba","ibas","iba","íbamos","iban","ibais"].
+   - engine.ts: ALL 5-entry tables extended to 6 — IMP_ENDINGS(+abais/íais), PRET_ENDINGS(+asteis/isteis), HABER_PRES(+habéis), FUT_ENDINGS(+éis), HABER_SUBJ(+hayáis), HABER_IMP_SUBJ(+hubierais/hubieseis), IMP_SUBJ_ENDINGS(+rais/seis), E_SUBS(+"you all"). PRES_ENDINGS/REFLEXIVE_PRONOUNS/pres[]/subj[] already had index 5.
+   - engine.ts present tense: vosotros now joins nosotros OUTSIDE the stem-change boot (pensáis/dormís/construís — never *piensáis/*duermís/*constrúis); the -ir "ímos" accent special-case stays nosotros-only.
+   - engine.ts preterite: specialForms.pret arrays (anduve/hice/fuiste…) only have 5 entries — vosotros now derives pret[1]+"is" (anduviste→anduvisteis, diste→disteis, fuiste→fuisteis).
+   - engine.ts English: vosotros added to the "are"/"were" be-verb branches → "you all are/were".
+2. FIXED the horizontal-lines-through-cells bug: root cause was `.bg-ruled` — a repeating-linear-gradient with a fixed 44px pitch that drifted across variable-height rows (h-11 inputs + verdict messages) and sliced through cell interiors. Removed the class from conjugation-chart.tsx + deleted the rule from globals.css (left a comment explaining why). The chart sheet now uses real per-row `border-b border-border/45 last:border-b-0` dividers which can NEVER misalign, on a warm `bg-accent/20` paper tint with rounded-xl + border.
+3. UI ease-of-use (kept every existing feature):
+   - Mobile column labels: the español/english header row was desktop-only — now a compact 2-col header renders on mobile too (matches the stacked row layout); inputs previously only had placeholders, reveal mode had NOTHING.
+   - SubjectPicker: horizontal-scroll single row on mobile (scrollbar hidden, sm:flex-wrap restores wrapping), tooltips now show "español — english" meaning, vosotros gets a tiny "es" Spain badge so US students understand what it is; SHORT_LABELS += "vos.".
+   - Practice setup: new "subjects" section between verbs & session — animated role=switch toggle "include vosotros" (Spain's informal you-all). OFF by default (classic 5) so existing practice behavior is unchanged; ON mixes vosotros into conjugation + translation questions.
+4. Plumbing for the toggle: quiz.ts QuizSettings.subjects?: SubjectKey[] (DEFAULT_QUIZ_SUBJECTS = classic 5; filters unknown, falls back); /api/practice/question zod schema += subjects; practice/types.ts client QuizSettings + sanitizeSettings + CLASSIC_SUBJECTS export; buildDrillSettings inherits subjects via ...base spread.
+5. API routes: /api/conjugate + /api/check SUBJECT_ENUM += "vosotros".
+6. VERIFIED:
+   - scripts/verify-vosotros.ts (new QA utility, kept for future engine changes): 70/70 vosotros expectations pass across hablar/pensar/dormir/pedir/reír/construir/huir/ir/dar/saber/estar/andar/hacer/tener/querer/conducir/caer/creer/acostarse/vestirse incl. English "you all" renderings + full 312-combo (52 verbs × 6 subjects) sweep with zero crashes/undefined forms.
+   - APIs: /api/conjugate {hablar,vosotros} → all 23 rows correct (habláis, hablasteis, habríais, hubierais hablado…); /api/check accent-only path works ("pensais"→accentOnly, expected "pensáis"); /api/practice/question with subjects:["vosotros"] → all-vosotros questions.
+   - NOTE: first API test after editing engine hit "Unknown subject: vosotros" 500s from a STALE Turbopack module cache in the conjugate/check route graphs (practice route had compiled fresh and worked). pkill + setsid restart fixed it — same restart-after-core-lib-change lesson as the Prisma note below.
+   - Browser (agent-browser): tables mode → vosotros badge + reveal forms (habláis/habéis hablado/habléis/hablarais) ✓; filled pres/pret + check → green success styling ✓; PIXEL-VERIFIED the line fix: scanned columns through input interiors — only input's own top/bottom borders + text present, no mid-cell stripes (VLM initially claimed lines remained — disproven by comparing detected line y-positions against DOM bounding rects; they were exactly the inputs' own borders); mobile 390px: 0 overflow, subject picker fits (334px) & scrollable, mobile column labels render; practice: toggle persists (tdv-practice subjects all 6), infinite session showed EN→ES "you all used to want" → answer "queríais"; cards mode: vosotros selected → card 4 shows "vosotros presente → habláis"; dark mode screenshot; fresh reload: no hydration issues, zero console errors, dev.log all 200s; hero now reads "6 subjects".
+   - VLM visual review: 8/10 polish, subject row clean, no artifacts.
+7. Cleanup: QA localStorage tdv-* keys cleared (fresh default state: yo/hablar), DB had 0 sessions (ended quiz session never persisted), browser session closed. Lint clean, tsc clean (src/ only).
+
+## Stage Summary
+- vosotros is now a first-class subject everywhere: chart (fill-in + reference + grading + mastery keys), flashcards (via shared SubjectPicker), and practice (opt-in toggle, default off).
+- The long-standing ruled-paper visual bug is fixed at the ROOT (no background-image tricks on variable-height content — real row borders only).
+- QA artifacts: /home/z/my-project/qa/r10-*.png (9 files). Utility: scripts/verify-vosotros.ts, scripts/clean-qa-data.ts.
+
+## Unresolved issues / risks / next-round priorities
+- Turbopack stale-module caching: after editing shared libs (engine/types), ALWAYS restart the dev server before browser QA (pkill -f "next dev" + setsid) — hot reload may keep serving old transitive modules per route.
+- VLM screenshot review is unreliable for "is there a line through X" questions (hallucinated lines that pixel analysis + DOM rects disproved) — prefer pixel/DOM verification for geometry claims; use VLM only for holistic polish feedback.
+- specialForms.pret vosotros derivation assumes the tú form ends in "ste" (true for all 14 irregular-preterite verbs in the data); if future verbs break that pattern, extend their pret arrays to 6 entries explicitly.
+- Next-round candidates (from r9 list, still open): flashcards per-card self-grade feeding spaced-repetition-lite ordering; cross-mode handoff ("study this verb in cards" from Tables); share-card public profile (blocked on single-user); re-run VLM visual pass on all three modes with NEUTRAL prompts.
+- Practice tenses still exclude the vos_pos/vos_neg COMMAND rows by design (PRACTICE_TENSES) — vosotros commands are only quizzed indirectly via the chart; a future round could add an opt-in "imperativos" preset including vos commands.

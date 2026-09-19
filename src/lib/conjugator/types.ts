@@ -3,7 +3,13 @@
 // Ported from the original constants.js / verbinfo.js
 // ─────────────────────────────────────────────────────────────
 
-export type SubjectKey = "yo" | "tu" | "el" | "nosotros" | "ellos";
+export type SubjectKey =
+  | "yo"
+  | "tu"
+  | "el"
+  | "nosotros"
+  | "vosotros"
+  | "ellos";
 
 export interface SubjectMeta {
   key: SubjectKey;
@@ -20,18 +26,32 @@ export const SUBJECTS: SubjectMeta[] = [
   { key: "tu", es: "tú", en: "you", pronoun: "tú" },
   { key: "el", es: "él / ella", en: "he / she", pronoun: "él" },
   { key: "nosotros", es: "nosotros", en: "we", pronoun: "nosotros" },
+  {
+    key: "vosotros",
+    es: "vosotros",
+    en: "you all (spain)",
+    pronoun: "vosotros",
+  },
   { key: "ellos", es: "ellos / ellas", en: "they", pronoun: "ellos" },
 ];
 
-export const SUBJECT_KEYS: SubjectKey[] = ["yo", "tu", "el", "nosotros", "ellos"];
+export const SUBJECT_KEYS: SubjectKey[] = [
+  "yo",
+  "tu",
+  "el",
+  "nosotros",
+  "vosotros",
+  "ellos",
+];
 
-/** numeric index used by the legacy engine (yo=0 … ellos=4) */
+/** numeric index used by the engine (yo=0 … ellos=4, vosotros=5 last) */
 export const SUBJECT_INDEX: Record<SubjectKey, number> = {
   yo: 0,
   tu: 1,
   el: 2,
   nosotros: 3,
   ellos: 4,
+  vosotros: 5,
 };
 
 // ── Tense / form rows ────────────────────────────────────────
@@ -139,13 +159,14 @@ export interface SpecialForms {
   gerund?: string;
   /** participle; array = multiple accepted (frito/freído) */
   participle?: string | [string, string];
-  /** fully irregular present tense (indexed by subject 0..5) */
+  /** fully irregular present tense (indexed by subject 0..5, vosotros last) */
   pres?: string[];
-  /** fully irregular imperfect (indexed by subject 0..4) */
+  /** fully irregular imperfect (indexed by subject 0..5, vosotros last) */
   imp?: string[];
-  /** fully irregular preterite (indexed by subject 0..4) */
+  /** fully irregular preterite (indexed by subject 0..4; the engine derives
+   *  the vosotros form from the tú form when index 5 is absent) */
   pret?: string[];
-  /** fully irregular present subjunctive (indexed by subject 0..5) */
+  /** fully irregular present subjunctive (indexed by subject 0..5, vosotros last) */
   subj?: string[];
   /** irregular tú affirmative command, e.g. "haz" */
   command?: string;
@@ -290,7 +311,7 @@ export const VERBS: Record<string, VerbAttrs> = {
     { inf: "do", ger: "doing", part: "done", pret: "did" },
     { inf: "make", ger: "making", part: "made", pret: "made" },
   ]),
-  ir: v(IR, false, NO_SC, { pres: ["voy", "vas", "va", "vamos", "van", "vais"], pret: ["fui", "fuiste", "fue", "fuimos", "fueron"], subj: ["vaya", "vayas", "vaya", "vayamos", "vayan", "vayáis"], command: "ve", gerund: "yendo", imp: ["iba", "ibas", "iba", "íbamos", "iban"], nos: "vamos" }, [
+  ir: v(IR, false, NO_SC, { pres: ["voy", "vas", "va", "vamos", "van", "vais"], pret: ["fui", "fuiste", "fue", "fuimos", "fueron"], subj: ["vaya", "vayas", "vaya", "vayamos", "vayan", "vayáis"], command: "ve", gerund: "yendo", imp: ["iba", "ibas", "iba", "íbamos", "iban", "ibais"], nos: "vamos" }, [
     { inf: "go", ger: "going", part: "gone", pret: "went" },
   ]),
   estar: v(AR, false, NO_SC, { pres: ["estoy", "estás", "está", "estamos", "están", "estáis"], pret: ["estuve", "estuviste", "estuvo", "estuvimos", "estuvieron"], subj: ["esté", "estés", "esté", "estemos", "estén", "estéis"] }, [

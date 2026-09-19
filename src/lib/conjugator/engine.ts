@@ -42,7 +42,8 @@ const TU = 1;
 const EL = 2;
 const NOSOTROS = 3;
 const ELLOS = 4;
-/** vosotros: exists only as an array index (6-entry ending/subjunctive arrays); never a question subject */
+/** vosotros sits at index 5 — LAST — so every array below can stay
+ *  backward-compatible with the 5-entry legacy data */
 const VOSOTROS = 5;
 
 const REFLEXIVE_PRONOUNS = ["me", "te", "se", "nos", "se", "os"];
@@ -54,29 +55,29 @@ const PRES_ENDINGS = [
 ];
 
 const IMP_ENDINGS = [
-  ["aba", "abas", "aba", "ábamos", "aban"],
-  ["ía", "ías", "ía", "íamos", "ían"],
+  ["aba", "abas", "aba", "ábamos", "aban", "abais"],
+  ["ía", "ías", "ía", "íamos", "ían", "íais"],
 ];
 
 const PRET_ENDINGS = [
-  ["é", "aste", "ó", "amos", "aron"],
-  ["í", "iste", "ió", "imos", "ieron"],
+  ["é", "aste", "ó", "amos", "aron", "asteis"],
+  ["í", "iste", "ió", "imos", "ieron", "isteis"],
 ];
 
-const HABER_PRES = ["he", "has", "ha", "hemos", "han"];
-const FUT_ENDINGS = ["é", "ás", "á", "emos", "án"];
-const HABER_SUBJ = ["haya", "hayas", "haya", "hayamos", "hayan"];
+const HABER_PRES = ["he", "has", "ha", "hemos", "han", "habéis"];
+const FUT_ENDINGS = ["é", "ás", "á", "emos", "án", "éis"];
+const HABER_SUBJ = ["haya", "hayas", "haya", "hayamos", "hayan", "hayáis"];
 const HABER_IMP_SUBJ = [
-  ["hubiera", "hubieras", "hubiera", "hubiéramos", "hubieran"],
-  ["hubiese", "hubieses", "hubiese", "hubiésemos", "hubiesen"],
+  ["hubiera", "hubieras", "hubiera", "hubiéramos", "hubieran", "hubierais"],
+  ["hubiese", "hubieses", "hubiese", "hubiésemos", "hubiesen", "hubieseis"],
 ];
 const IMP_SUBJ_ENDINGS = [
-  ["ra", "ras", "ra", "ramos", "ran"],
-  ["se", "ses", "se", "semos", "sen"],
+  ["ra", "ras", "ra", "ramos", "ran", "rais"],
+  ["se", "ses", "se", "semos", "sen", "seis"],
 ];
 
-/** English subject pronouns, indexed by subject (yo=0 … ellos=4). */
-const E_SUBS = ["i", "you", "he", "we", "they"];
+/** English subject pronouns, indexed by subject (yo=0 … ellos=4, vosotros=5). */
+const E_SUBS = ["i", "you", "he", "we", "they", "you all"];
 
 function dedup(items: string[]): string[] {
   return [...new Set(items)];
@@ -392,9 +393,11 @@ function buildSolution(verb: string, subject: SubjectKey): Solution {
   let pres: string;
   if (attr.specialForms.pres != null) {
     pres = attr.specialForms.pres[sujeto];
-  } else if (sujeto === NOSOTROS) {
-    // -ir verbs whose stem ends in "e" keep the accent: reír → reímos
-    if (attr.endingType === IR && stem.substring(stem.length - 1) === "e") {
+  } else if (sujeto === NOSOTROS || sujeto === VOSOTROS) {
+    // nosotros & vosotros sit OUTSIDE the stem-change "boot" —
+    // pensar → pensamos / pensáis (never *piensáis), dormir → dormís
+    if (sujeto === NOSOTROS && attr.endingType === IR && stem.substring(stem.length - 1) === "e") {
+      // -ir verbs whose stem ends in "e" keep the accent: reír → reímos
       pres = stem + "ímos";
     } else {
       pres = stem + PRES_ENDINGS[attr.endingType][sujeto];
@@ -468,6 +471,13 @@ function buildSolution(verb: string, subject: SubjectKey): Solution {
       }
     } else {
       pret = attr.specialForms.pret[sujeto];
+      // irregular preterite arrays historically carry 5 entries — the
+      // vosotros form is the tú form with "-ste" widened to "-steis"
+      // (anduviste → anduvisteis, fuiste → fuisteis, diste → disteis)
+      if (pret == null && sujeto === VOSOTROS) {
+        const tu = attr.specialForms.pret[TU] ?? "";
+        pret = tu.endsWith("ste") ? tu + "is" : tu;
+      }
     }
     if (attr.isReflexive) {
       pret = REFLEXIVE_PRONOUNS[sujeto] + " " + pret;
@@ -695,7 +705,7 @@ function buildSolution(verb: string, subject: SubjectKey): Solution {
       english.pres.push(
         be ? `${sub} is${inf.substring(2)}` : `${sub} ${inf}s`
       );
-    } else if (be && (sujeto === TU || sujeto === NOSOTROS || sujeto === ELLOS)) {
+    } else if (be && (sujeto === TU || sujeto === NOSOTROS || sujeto === ELLOS || sujeto === VOSOTROS)) {
       english.pres.push(`${sub} are${inf.substring(2)}`);
     } else {
       english.pres.push(`${sub} ${inf}`);
@@ -712,7 +722,7 @@ function buildSolution(verb: string, subject: SubjectKey): Solution {
     }
 
     // preterite
-    if (be && (sujeto === TU || sujeto === NOSOTROS || sujeto === ELLOS)) {
+    if (be && (sujeto === TU || sujeto === NOSOTROS || sujeto === ELLOS || sujeto === VOSOTROS)) {
       english.pret.push(`${sub} were${inf.substring(2)}`);
     } else {
       english.pret.push(`${sub} ${pretEn}`);

@@ -155,16 +155,10 @@ html.dark body {
   background-attachment: fixed;
 }
 
-/* ruled language-workbook paper */
-.bg-ruled {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 43px,
-    color-mix(in oklch, var(--border) 65%, transparent) 43px,
-    color-mix(in oklch, var(--border) 65%, transparent) 44px
-  );
-}
+/* NOTE: the old ".bg-ruled" fixed-pitch ruled-paper background was removed —
+   its 44px grid drifted across variable-height chart rows and sliced through
+   the input cells. The chart sheet now uses real per-row border dividers
+   (see conjugation-chart.tsx), which can never misalign. */
 
 /* subtle dotted paper for hero/setup areas */
 .bg-dotted {

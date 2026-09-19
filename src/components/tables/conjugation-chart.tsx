@@ -462,8 +462,9 @@ export function ConjugationChart({
           </div>
         )}
 
-        <div ref={sheetRef} className="rounded-lg bg-ruled p-3 sm:p-4">
-          {/* column labels (desktop) */}
+        <div ref={sheetRef} className="rounded-xl border border-border/50 bg-accent/20 p-3 sm:p-4">
+          {/* column labels — desktop (3-col) + mobile (2-col, matches the
+              stacked label-above / two-cells-below row layout) */}
           <div
             className="mb-1 hidden grid-cols-[minmax(120px,1fr)_1fr_1fr] gap-x-4 md:grid"
             aria-hidden="true"
@@ -471,6 +472,17 @@ export function ConjugationChart({
             <span className="pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
               form
             </span>
+            <span className="pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              español
+            </span>
+            <span className="pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              english
+            </span>
+          </div>
+          <div
+            className="mb-1 grid grid-cols-2 gap-2 px-1.5 md:hidden"
+            aria-hidden="true"
+          >
             <span className="pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
               español
             </span>
@@ -517,7 +529,7 @@ export function ConjugationChart({
                   return (
                     <div
                       key={row.key}
-                      className="group grid gap-2 rounded-lg px-1.5 py-3 transition-colors duration-150 hover:bg-foreground/[0.035] md:grid-cols-[minmax(120px,1fr)_1fr_1fr] md:items-center md:gap-x-4 md:px-2"
+                      className="group grid gap-2 border-b border-border/45 px-1.5 py-3 transition-colors duration-150 last:border-b-0 hover:bg-foreground/[0.035] md:grid-cols-[minmax(120px,1fr)_1fr_1fr] md:items-center md:gap-x-4 md:px-2"
                     >
                       <div className="min-w-0">
                         <p className="flex items-center gap-1.5 text-sm font-semibold leading-tight">

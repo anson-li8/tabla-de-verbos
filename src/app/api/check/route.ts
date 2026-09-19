@@ -18,7 +18,7 @@ import { checkAnswer, normalizeEs, stripAccents } from "@/lib/conjugator/checker
 
 export const dynamic = "force-dynamic";
 
-const SUBJECT_ENUM = z.enum(["yo", "tu", "el", "nosotros", "ellos"]);
+const SUBJECT_ENUM = z.enum(["yo", "tu", "el", "nosotros", "vosotros", "ellos"]);
 
 const bodySchema = z.object({
   verb: z.string(),

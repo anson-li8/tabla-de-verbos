@@ -17,6 +17,16 @@ import type { RowKey, SubjectKey } from "./types";
 
 export type QuestionKind = "conjugation" | "translate-es-en" | "translate-en-es";
 
+/** the classic 5 course subjects — practice questions draw from these
+ *  unless the learner opts into vosotros via settings.subjects */
+const DEFAULT_QUIZ_SUBJECTS: SubjectKey[] = [
+  "yo",
+  "tu",
+  "el",
+  "nosotros",
+  "ellos",
+];
+
 export interface QuizSettings {
   types: QuestionKind[];
   tenses: RowKey[];
@@ -29,6 +39,13 @@ export interface QuizSettings {
    * pool silently falls back to `level` if nothing valid remains.
    */
   verbs?: string[];
+  /**
+   * Optional subject pool for conjugation/translation questions. Defaults
+   * to the classic 5 course subjects (no vosotros); pass vosotros in the
+   * list to mix in Spain's informal 2nd-person plural. Unknown keys are
+   * filtered, and an empty/invalid list falls back to the default.
+   */
+  subjects?: SubjectKey[];
 }
 
 export interface Question {
@@ -106,11 +123,11 @@ function dedup(items: string[]): string[] {
 }
 
 /** subject shown on the question (null for subjectless & imperative rows) */
-function pickSubject(tense: RowKey): SubjectKey | null {
+function pickSubject(tense: RowKey, pool: SubjectKey[]): SubjectKey | null {
   if (SUBJECTLESS_TENSES.has(tense) || COMMAND_TENSES.has(tense)) {
     return null;
   }
-  return pick(SUBJECT_KEYS);
+  return pick(pool);
 }
 
 function rowsByTense(verb: string, subject: SubjectKey): Map<RowKey, ConjugationRow> {
@@ -136,9 +153,13 @@ function bareSpanish(row: ConjugationRow): string {
 
 // ── Question builders ────────────────────────────────────────
 
-function conjugationQuestion(verb: string, tense: RowKey): Question {
+function conjugationQuestion(
+  verb: string,
+  tense: RowKey,
+  subjectPool: SubjectKey[]
+): Question {
   const meta = ROW_META[tense];
-  const subject = pickSubject(tense);
+  const subject = pickSubject(tense, subjectPool);
   const rows = rowsByTense(verb, subject ?? DEFAULT_ROW_SUBJECT);
   const row = rowFor(rows, tense);
   return {
@@ -161,9 +182,13 @@ function conjugationQuestion(verb: string, tense: RowKey): Question {
  * every row that shares that Spanish form (so "hablamos" accepts both
  * "we speak" and "we spoke").
  */
-function translateEsEnQuestion(verb: string, tense: RowKey): Question | null {
+function translateEsEnQuestion(
+  verb: string,
+  tense: RowKey,
+  subjectPool: SubjectKey[]
+): Question | null {
   const meta = ROW_META[tense];
-  const subject = pickSubject(tense);
+  const subject = pickSubject(tense, subjectPool);
   const rows = rowsByTense(verb, subject ?? DEFAULT_ROW_SUBJECT);
   const chosen = rowFor(rows, tense);
 
@@ -205,9 +230,13 @@ function translateEsEnQuestion(verb: string, tense: RowKey): Question | null {
  * English → Spanish: show the row's canonical English phrase, accept every
  * Spanish form from every row whose English contains that exact phrase.
  */
-function translateEnEsQuestion(verb: string, tense: RowKey): Question | null {
+function translateEnEsQuestion(
+  verb: string,
+  tense: RowKey,
+  subjectPool: SubjectKey[]
+): Question | null {
   const meta = ROW_META[tense];
-  const subject = pickSubject(tense);
+  const subject = pickSubject(tense, subjectPool);
   const rows = rowsByTense(verb, subject ?? DEFAULT_ROW_SUBJECT);
   const chosen = rowFor(rows, tense);
 
@@ -268,14 +297,20 @@ export function generateQuestion(settings: QuizSettings): Question {
   const tense = pick(tenses);
   const verb = pick(pool);
 
+  // subject pool — classic 5 by default, vosotros only when opted in
+  const knownSubjects = (settings.subjects ?? []).filter((s) =>
+    (SUBJECT_KEYS as readonly string[]).includes(s)
+  );
+  const subjectPool = knownSubjects.length > 0 ? knownSubjects : DEFAULT_QUIZ_SUBJECTS;
+
   if (kind === "translate-es-en") {
-    const q = translateEsEnQuestion(verb, tense);
+    const q = translateEsEnQuestion(verb, tense, subjectPool);
     if (q) return q;
   } else if (kind === "translate-en-es") {
-    const q = translateEnEsQuestion(verb, tense);
+    const q = translateEnEsQuestion(verb, tense, subjectPool);
     if (q) return q;
   }
   // conjugation — or the fallback guard when a translation question
   // unexpectedly produced no acceptable answers.
-  return conjugationQuestion(verb, tense);
+  return conjugationQuestion(verb, tense, subjectPool);
 }

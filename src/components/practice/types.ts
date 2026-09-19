@@ -7,6 +7,7 @@ import {
   ALL_VERBS,
   SP5_VERBS,
   SP6_VERBS,
+  SUBJECT_KEYS,
   type RowKey,
   type SubjectKey,
 } from "@/lib/conjugator/types";
@@ -26,6 +27,9 @@ export interface QuizSettings {
   durationSec: number;
   /** explicit verb pool for miss-drills — overrides level when non-empty */
   verbs?: string[];
+  /** subject pool — undefined means the classic 5 (no vosotros);
+   *  set when the learner toggles vosotros into the mix */
+  subjects?: SubjectKey[];
 }
 
 export interface Question {
@@ -255,6 +259,15 @@ const KIND_VALUES: string[] = [
   "translate-en-es",
 ];
 
+/** the classic course subjects used when settings.subjects is unset */
+export const CLASSIC_SUBJECTS: SubjectKey[] = [
+  "yo",
+  "tu",
+  "el",
+  "nosotros",
+  "ellos",
+];
+
 export const DEFAULT_SETTINGS: QuizSettings = {
   types: ["conjugation", "translate-es-en", "translate-en-es"],
   tenses: [...CORE_TENSES],
@@ -289,6 +302,13 @@ export function sanitizeSettings(raw: unknown): QuizSettings {
     durationSec: DURATION_OPTIONS.includes(r.durationSec as number)
       ? (r.durationSec as number)
       : DEFAULT_SETTINGS.durationSec,
+    subjects:
+      Array.isArray(r.subjects) &&
+      r.subjects.some((s) => (SUBJECT_KEYS as readonly string[]).includes(s))
+        ? r.subjects.filter((s): s is SubjectKey =>
+            (SUBJECT_KEYS as readonly string[]).includes(s)
+          )
+        : undefined,
   };
 }
 

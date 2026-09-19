@@ -37,6 +37,7 @@ import { DailyStrip } from "./daily-strip";
 import { RecordsStrip } from "./records-strip";
 import { useDailyGoal } from "./use-daily-goal";
 import {
+  CLASSIC_SUBJECTS,
   CORE_TENSES,
   DURATION_OPTIONS,
   MICRO,
@@ -161,6 +162,17 @@ export function SetupScreen({
       ? settings.tenses.filter((t) => t !== tense)
       : [...settings.tenses, tense];
     onChange({ ...settings, tenses });
+  };
+
+  // vosotros is mixed into the classic 5 — never swaps them out
+  const vosotrosOn = settings.subjects?.includes("vosotros") ?? false;
+  const toggleVosotros = () => {
+    onChange({
+      ...settings,
+      subjects: vosotrosOn
+        ? settings.subjects?.filter((s) => s !== "vosotros")
+        : [...(settings.subjects ?? CLASSIC_SUBJECTS), "vosotros"],
+    });
   };
 
   const typesOk = settings.types.length > 0;
@@ -414,6 +426,62 @@ export function SetupScreen({
                     </button>
                   );
                 })}
+              </div>
+            </motion.section>
+
+            {/* subjects — vosotros opt-in */}
+            <motion.section variants={sectionVariants} aria-label="subjects">
+              <h3 className={cn(MICRO, "mb-3")}>
+                <span
+                  aria-hidden="true"
+                  className="mr-2 inline-block h-px w-4 translate-y-[-1px] bg-primary/70"
+                />
+                subjects
+              </h3>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed bg-muted/30 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-tight">
+                    include vosotros
+                  </p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                    Spain&apos;s informal &ldquo;you all&rdquo; — habláis, coméis,
+                    vivís. The chart&apos;s 5 classic subjects stay in the mix.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={vosotrosOn}
+                  onClick={toggleVosotros}
+                  className={cn(
+                    "relative inline-flex h-9 w-16 shrink-0 items-center rounded-full border transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                    vosotrosOn
+                      ? "border-primary bg-primary"
+                      : "border-border bg-card hover:border-primary/40"
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "pointer-events-none ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-card font-mono text-[9px] font-semibold uppercase tracking-wide shadow-sm transition-transform duration-200",
+                      vosotrosOn
+                        ? "translate-x-7 text-primary"
+                        : "translate-x-0 text-muted-foreground"
+                    )}
+                  >
+                    es
+                  </span>
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute font-mono text-[9px] font-medium uppercase tracking-[0.12em] transition-opacity",
+                      vosotrosOn
+                        ? "left-3 text-primary-foreground opacity-100"
+                        : "right-3 text-muted-foreground/70 opacity-100"
+                    )}
+                  >
+                    {vosotrosOn ? "on" : "off"}
+                  </span>
+                </button>
               </div>
             </motion.section>
 
