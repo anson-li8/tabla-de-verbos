@@ -22,6 +22,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import { ROW_META, type RowKey } from "@/lib/conjugator/types";
 import { cn } from "@/lib/utils";
@@ -79,12 +84,13 @@ function TrendBadge({ delta }: { delta: number | null }) {
 // ── Sparkline ────────────────────────────────────────────────
 
 function Sparkline({
-  accuracies,
+  points,
   labels,
 }: {
-  accuracies: number[];
+  points: FocusStatsResponse["trend"];
   labels: { first: string; last: string };
 }) {
+  const accuracies = points.map((p) => p.accuracy);
   const pts = sparklinePoints(accuracies);
   const lineD = pts
     .map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`)
@@ -141,30 +147,55 @@ function Sparkline({
           animate={{ pathLength: 1 }}
           transition={{ duration: 1.1, ease: "easeOut" }}
         />
-        {/* data points */}
-        {pts.map(([x, y], i) => (
-          <motion.circle
-            key={i}
-            cx={x}
-            cy={y}
-            r={i === pts.length - 1 ? 3.5 : 2.2}
-            className={
-              i === pts.length - 1
-                ? "fill-primary stroke-background"
-                : "fill-background stroke-primary/70"
-            }
-            strokeWidth="1.5"
-            vectorEffect="non-scaling-stroke"
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{
-              delay: 0.15 + i * 0.05,
-              type: "spring",
-              stiffness: 400,
-              damping: 22,
-            }}
-          />
-        ))}
+        {/* data points — each dot carries a hover tooltip with its
+            session date, accuracy and score */}
+        {pts.map(([x, y], i) => {
+          const p = points[i];
+          const tip = p
+            ? `${new Date(p.createdAt).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+              })} · ${Math.round(p.accuracy * 100)}% · ${p.score}/${p.total}`
+            : "";
+          return (
+            <g key={i}>
+              <motion.circle
+                cx={x}
+                cy={y}
+                r={i === pts.length - 1 ? 3.5 : 2.2}
+                className={
+                  i === pts.length - 1
+                    ? "fill-primary stroke-background"
+                    : "fill-background stroke-primary/70"
+                }
+                strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{
+                  delay: 0.15 + i * 0.05,
+                  type: "spring",
+                  stiffness: 400,
+                  damping: 22,
+                }}
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={13}
+                    fill="transparent"
+                    style={{ pointerEvents: "all" }}
+                  />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="font-mono text-[10px]">
+                  {tip}
+                </TooltipContent>
+              </Tooltip>
+            </g>
+          );
+        })}
       </svg>
       <figcaption className="flex items-center justify-between font-mono text-[10px] tabular-nums text-muted-foreground/80">
         <span>{labels.first}</span>
@@ -229,7 +260,7 @@ export function FocusPanel({
       transition={{ duration: 0.35, ease: "easeOut" }}
       aria-label="focus — your progress"
     >
-      <Card className="rounded-2xl py-0 shadow-sm">
+      <Card className="rounded-2xl bg-dotted py-0 shadow-sm">
         <CardContent className="space-y-5 p-5 sm:p-6">
           {/* header */}
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -243,7 +274,7 @@ export function FocusPanel({
           <div className="grid gap-6 lg:grid-cols-[3fr_2fr] lg:gap-8">
             {/* sparkline */}
             <Sparkline
-              accuracies={trend.map((p) => p.accuracy)}
+              points={trend}
               labels={{
                 first: dayLabel(trend[0].createdAt),
                 last: dayLabel(trend[trend.length - 1].createdAt),

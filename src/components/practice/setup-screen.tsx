@@ -29,9 +29,11 @@ import {
 import { ROW_META, type RowKey } from "@/lib/conjugator/types";
 import { cn } from "@/lib/utils";
 
+import { ActivityHeatmap } from "./activity-heatmap";
 import { FocusPanel } from "./focus-panel";
 import { DailyStrip } from "./daily-strip";
 import { RecordsStrip } from "./records-strip";
+import { useDailyGoal } from "./use-daily-goal";
 import {
   CORE_TENSES,
   DURATION_OPTIONS,
@@ -127,6 +129,12 @@ export function SetupScreen({
   onVerbDrill,
   onTenseDrill,
 }: SetupScreenProps) {
+  // user-configurable daily goal (localStorage) — falls back to
+  // the server constant until the visitor picks a preset
+  const { goal, userGoal, saveGoal } = useDailyGoal(
+    focusStats?.daily.goal ?? 20
+  );
+
   const toggleType = (kind: QuestionKind) => {
     const types = settings.types.includes(kind)
       ? settings.types.filter((t) => t !== kind)
@@ -165,14 +173,28 @@ export function SetupScreen({
     <div className="mx-auto w-full max-w-3xl space-y-6">
       {/* daily goal + racha (needs at least one session on record) */}
       {focusStats && focusStats.totals.sessions > 0 && (
-        <DailyStrip daily={focusStats.daily} />
+        <DailyStrip
+          daily={focusStats.daily}
+          goal={goal}
+          userGoal={userGoal}
+          onGoalChange={saveGoal}
+        />
       )}
 
       {/* personal records */}
       <section aria-label="your records">
         <h2 className={cn(MICRO, "mb-3")}>your records</h2>
-        <RecordsStrip data={sessions} loading={sessionsLoading} />
+        <RecordsStrip
+          data={sessions}
+          loading={sessionsLoading}
+          daily={focusStats?.daily ?? null}
+        />
       </section>
+
+      {/* activity calendar (self-hides until the first session) */}
+      {focusStats && focusStats.totals.sessions > 0 && (
+        <ActivityHeatmap days={focusStats.daily.days} goal={goal} />
+      )}
 
       {/* focus analytics + miss-drill quick start (self-hiding
           until the first session exists) */}

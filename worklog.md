@@ -272,3 +272,41 @@ Task: Continuous improvement round 3 — status assessment, QA, per-tense breakd
 - The daily goal (20) is a constant exported from the stats route — natural next step: user-configurable goal persisted in localStorage.
 - Next-round candidate features (priority order): (1) streak calendar/heatmap (daily aggregates now exist — needs a `days` array in the stats response + a calendar grid component); (2) share/print results as an image card (canvas render of the summary); (3) per-question timing analytics (avgMsPerQuestion exists per session; per-tense timing could reveal slow tenses); (4) verb-of-the-day archive ("yesterday's verbs"); (5) records strip could include best day-streak.
 - QA screenshot artifacts: /home/z/my-project/qa/r3-*.png (10 files).
+
+---
+Task ID: 10 (cron review round 4)
+Agent: cron-webDevReview
+Task: Continuous improvement round 4 — status assessment, QA, activity heatmap, configurable daily goal, day-racha record, share-as-image results card, styling polish
+
+## Current project status / assessment
+- App fully stable at round start (rounds 1–9 complete): engine PASS (13,397+ randomized cases), lint clean, tsc clean (src/), dev server healthy on :3000, DB at 0 sessions.
+- Round-4 QA pass (named session `r4-qa`, all stray sessions closed first) found NO app bugs: Tables fill → check → per-cell green/red verdicts + toast feedback ("5/5 filled cells correct"), Practice setup → timed quiz → feedback states → finish-early dialog → results, share button, dark/light themes, mobile 390px (page never overflows; zero offenders beyond right edge in both modes), no console errors.
+- QA-harness lesson (NOT an app bug): the mode-switcher buttons render lowercase "check"/"practice" text visually uppercased via CSS — case-SENSITIVE textContent matching in eval clicks silently no-ops. Also `agent-browser set viewport W H` (not `viewport`/`device` — device emulation needs macOS), and toasts auto-dismiss in ~4s so sample them immediately after clicking.
+
+## Goals / completed modifications / verification results
+1. FEATURE — activity heatmap ("el calendario"):
+   - GET /api/sessions/stats: `daily.days` — sparse `{date: "YYYY-MM-DD", total}[]` over the last 24 weeks (HEATMAP_DAYS=168, only practiced days, oldest→newest, DST-safe via setDate).
+   - New src/components/practice/activity-heatmap.tsx: 24 Monday-aligned week columns × 7 rows (L M X J V S D), 5 intensity levels relative to the goal (0 / <½ / ½ / met / 2×), shadcn Tooltip per cell ("14 preguntas · 26 jul"), today ring-2, month marks, legend + "mejor día", staggered spring pop-in, overflow-x-auto with tiny cells on mobile.
+   - Geometry uses CSS vars `--cell`/`--gap` on one owner div so month row, weekday labels and cell grid share identical column math — initial attempt had misaligned month labels (two differently-sized grids); fixed and VERIFIED programmatically (label row width == cell grid width == 309px, first-label x == first-cell x, all 7 weekday deltas = 0).
+2. FEATURE — user-configurable daily goal:
+   - New src/components/practice/use-daily-goal.ts: localStorage "tdv-daily-goal", presets DAILY_GOAL_OPTIONS=[10,20,30,50] in types.ts, lazy useState initializer (hydration-safe: goal only feeds components that render after client data loads; passed the react-hooks/set-state-in-effect lint rule without effects).
+   - DailyStrip: pencil button next to "hoy · meta N" opens a Popover radiogroup (10/20/30/50); pick persists + live-updates strip, progress bar, aria labels AND the heatmap intensity scale.
+   - VERIFIED: goal 10 → "hoy · meta 10", stored "10", progressbar aria "22 of 10", "¡meta cumplida!"; survives reload; reset to 20 after test.
+3. FEATURE — "day racha" record card:
+   - RecordsStrip: optional `daily` prop adds a 5th card (CalendarCheck2 icon, "4d" value, primary-tinted gradient + accent border). Grid now `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5`; the sessions card spans the full mobile row (col-span-2 sm:col-span-1) so 5 cards never orphan. Loading skeleton labels unchanged (4 → fine).
+4. FEATURE — share results as image:
+   - New src/components/practice/share-card.ts: canvas 1080×1350 PNG — cream paper + dot texture, editorial frame with brick corner ticks, masthead, "sesión de práctica", giant accuracy % (color matches ring semantics ≥80 green / ≥50 brick / else red), score, stats row (racha/tiempo/modo), date footer. Resolves next/font families via CSS vars (--font-fraunces/--font-plex-mono/--font-inter) + document.fonts.load.
+   - results-screen: icon button (ImageDown) top-right of the hero card with tooltip; busy spinner; success/failure toasts.
+   - VERIFIED: agent-browser `download` captured a real 1080×1350 PNG; VLM review 10/10 (fonts render, no clipping, "highly shareable"); toast "Results card saved" fires.
+5. POLISH — focus panel + records:
+   - FocusPanel card now `bg-dotted` (texture parity with builder/results hero).
+   - Sparkline: every point has an invisible r=13 hit circle with a shadcn Tooltip — "Sep 2 · 78% · 7/9" (date · accuracy · score/total). Sparkline prop changed from `accuracies` to full `points: FocusTrendPoint[]`.
+   - Records cards: group hover — icon turns primary, gradient top-rule appears, translate+shadow (existing), accent card gets a subtle primary gradient.
+6. QA/verification: lint clean; tsc clean (src/); engine PASS (total varies ±few across runs — randomized quiz tests, e.g. 13397/13399/13400 — all pass); dev.log clean compiles; dark + light themes verified; mobile 390px + desktop 1280px verified (VLM desktop 9/10 "no visual bugs", mobile programmatic checks all pass); all test data cleaned (0 sessions); scripts/seed-days.ts added (seeds 22 sessions across 55 days — reuse for heatmap QA, then clean-sessions).
+
+## Unresolved issues / risks / next-round priorities
+- MultiEdit STILL non-atomic: a "failed" multi-edit this round silently applied its first edit (duplicate Tooltip import in focus-panel) → compile error seen by the browser before I noticed. Mitigation used: single small Edits + re-read after ANY failure + `bun run lint` before browser QA. Keep doing this.
+- agent-browser console shows CUMULATIVE history for the session (stale errors from mid-edit states persist in the log) — judge errors by dev.log + fresh page loads, not old console lines.
+- Heatmap day keys use the SERVER's local timezone (dayKey over createdAt) while grid alignment uses the BROWSER's clock — same-machine use is exact; a remote-server TZ mismatch could shift cells by one day near midnight. Acceptable for this self-hosted app (streak logic has the same property).
+- Next-round candidate features (priority order): (1) per-question timing analytics (avgMsPerQuestion exists per session; per-tense timing would reveal slow tenses — add to stats hardestTenses or results); (2) verb-of-the-day archive ("yesterday's verbs" — derive deterministically from date, no schema change needed); (3) practice reminders/pacing hint ("best time to practice" from hour-of-day aggregates); (4) tables mode: per-cell keyboard navigation (arrow keys between inputs) for power users; (5) share card could include the tense-by-tense breakdown bars.
+- QA screenshot artifacts: /home/z/my-project/qa/r4-*.png (16 files) + qa/r4-13-share-card.png (the generated 1080×1350 card itself).

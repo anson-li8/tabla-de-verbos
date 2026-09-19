@@ -126,6 +126,13 @@ export interface HardestTense {
   t: number;
 }
 
+/** one practiced day in the activity heatmap (sparse — gaps mean zero) */
+export interface DayCount {
+  /** local-calendar day key "YYYY-MM-DD" */
+  date: string;
+  total: number;
+}
+
 /** daily-goal aggregates for the racha strip */
 export interface DailyStats {
   goal: number;
@@ -133,6 +140,8 @@ export interface DailyStats {
   streakDays: number;
   bestStreakDays: number;
   activeToday: boolean;
+  /** sparse day counts over the last 24 weeks, oldest → newest */
+  days: DayCount[];
 }
 
 export interface FocusStatsResponse {
@@ -182,6 +191,9 @@ export const CORE_TENSES: RowKey[] = ["pres", "imp", "pret", "fut", "cond"];
 
 /** timed challenge durations in seconds (1 / 2 / 5 / 10 min) */
 export const DURATION_OPTIONS = [60, 120, 300, 600];
+
+/** selectable daily-goal presets (questions per day) */
+export const DAILY_GOAL_OPTIONS = [10, 20, 30, 50] as const;
 
 const KIND_VALUES: string[] = [
   "conjugation",

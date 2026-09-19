@@ -13,7 +13,9 @@
 //                  sessions (chronological — feeds "drill my
 //                  misses" quick start)
 //   daily          daily-goal aggregates: today's question count,
-//                  day-streak (racha) and the goal constant
+//                  day-streak (racha), the goal constant and a sparse
+//                  `days` array (last 24 weeks, practiced days only)
+//                  feeding the activity heatmap
 //   totals         sessions & misses in the analyzed window
 // ─────────────────────────────────────────────────────────────
 
@@ -34,6 +36,8 @@ const SHAKIEST_MIN_ANSWERS = 5;
 export const DAILY_GOAL = 20;
 /** sessions scanned for the day-streak (bounded — far beyond a year of daily use) */
 const DAILY_SCAN = 2000;
+/** days covered by the activity heatmap (24 weeks, Monday-aligned) */
+const HEATMAP_DAYS = 168;
 
 /** normalized missed-question record persisted as JSON (see POST /api/sessions) */
 interface MissRow {
@@ -223,6 +227,16 @@ export async function GET() {
       prev = d;
     }
 
+    // activity heatmap: sparse day counts over the last 24 weeks
+    // (oldest → newest, only practiced days — the client fills gaps)
+    const days: { date: string; total: number }[] = [];
+    for (let i = HEATMAP_DAYS - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i); // DST-safe calendar arithmetic
+      const total = dayTotals.get(dayKey(d));
+      if (total) days.push({ date: dayKey(d), total });
+    }
+
     return NextResponse.json({
       trend,
       trendDelta,
@@ -235,6 +249,7 @@ export async function GET() {
         streakDays,
         bestStreakDays,
         activeToday,
+        days,
       },
       totals: { sessions: chrono.length, missCount },
     });

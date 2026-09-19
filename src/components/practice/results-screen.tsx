@@ -10,6 +10,7 @@ import confetti from "canvas-confetti";
 import { motion } from "framer-motion";
 import {
   Flame,
+  ImageDown,
   Loader2,
   Play,
   Settings2,
@@ -20,6 +21,11 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import { ROW_META, SUBJECTS, type RowKey } from "@/lib/conjugator/types";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +33,7 @@ import { cn } from "@/lib/utils";
 
 import { AccuracyRing } from "./accuracy-ring";
 import { RecentSessions } from "./recent-sessions";
+import { downloadShareCard } from "./share-card";
 import {
   MICRO,
   formatDuration,
@@ -68,6 +75,7 @@ export function ResultsScreen({
 }: ResultsScreenProps) {
   const { toast } = useToast();
   const [shareState, setShareState] = useState<"idle" | "copied">("idle");
+  const [cardBusy, setCardBusy] = useState(false);
   // fire confetti once for strong sessions (≥ 80% with ≥ 5 questions)
   const celebratedRef = useRef(false);
   useEffect(() => {
@@ -116,6 +124,33 @@ export function ResultsScreen({
     .sort((a, b) => tallyAccuracy(a[1]) - tallyAccuracy(b[1]));
   const showBreakdown = tallyRows.length > 0 && tallyTotal(summary.tally) >= 4;
 
+  // ── render + download the branded results card (PNG) ──
+  const handleSaveImage = async () => {
+    if (cardBusy) return;
+    setCardBusy(true);
+    const ok = await downloadShareCard({
+      score: summary.score,
+      total: summary.total,
+      accuracy: summary.accuracy,
+      bestStreak: summary.bestStreak,
+      avgMsPerQuestion: summary.avgMsPerQuestion,
+      modeLine,
+    });
+    setCardBusy(false);
+    if (ok) {
+      toast({
+        title: "Results card saved",
+        description: "check your downloads — share it anywhere",
+      });
+    } else {
+      toast({
+        title: "Couldn't render the card",
+        description: "your browser blocked the canvas download",
+        variant: "destructive",
+      });
+    }
+  };
+
   // ── share the session summary (Web Share → clipboard fallback) ──
   const handleShare = async () => {
     const pct = Math.round(summary.accuracy * 100);
@@ -150,8 +185,28 @@ export function ResultsScreen({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: "easeOut" }}
         aria-label="session results"
-        className="rounded-2xl border bg-card bg-dotted p-6 shadow-sm sm:p-8"
+        className="relative rounded-2xl border bg-card bg-dotted p-6 shadow-sm sm:p-8"
       >
+        {/* download the branded results card */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => void handleSaveImage()}
+              disabled={cardBusy}
+              aria-label="download your results as an image"
+              title="download results card"
+              className="absolute right-4 top-4 z-10 inline-flex size-10 items-center justify-center rounded-full border border-border bg-card/90 text-muted-foreground shadow-xs backdrop-blur transition-colors outline-none hover:border-primary/40 hover:text-primary focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60 sm:right-6 sm:top-6"
+            >
+              {cardBusy ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <ImageDown className="size-4" aria-hidden="true" />
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">save results as image</TooltipContent>
+        </Tooltip>
         <div className="flex flex-col items-center gap-8 sm:flex-row sm:gap-10">
           <AccuracyRing accuracy={summary.accuracy} />
           <div className="w-full flex-1 space-y-4 text-center sm:text-left">

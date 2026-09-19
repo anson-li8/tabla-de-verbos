@@ -3,23 +3,40 @@
 // ─────────────────────────────────────────────────────────────
 // DailyStrip — the setup screen's engagement bar: the racha
 // (consecutive practiced days) on the left, today's progress
-// toward the daily question goal on the right. Fed by the
-// `daily` block of GET /api/sessions/stats.
+// toward the daily question goal on the right. The goal is
+// user-configurable via the "meta" popover (persisted by the
+// caller through useDailyGoal). Fed by the `daily` block of
+// GET /api/sessions/stats.
 // ─────────────────────────────────────────────────────────────
 
 import { motion } from "framer-motion";
-import { Flame } from "lucide-react";
+import { Flame, PencilLine } from "lucide-react";
+
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 import { cn } from "@/lib/utils";
-
-import type { DailyStats } from "./types";
+import { DAILY_GOAL_OPTIONS, type DailyStats } from "./types";
 
 interface DailyStripProps {
   daily: DailyStats;
+  /** effective goal (user pick, else the server constant) */
+  goal: number;
+  /** the user's explicit pick, if any — highlights the preset */
+  userGoal: number | null;
+  onGoalChange: (goal: number) => void;
 }
 
-export function DailyStrip({ daily }: DailyStripProps) {
-  const { goal, todayQuestions, streakDays, activeToday } = daily;
+export function DailyStrip({
+  daily,
+  goal,
+  userGoal,
+  onGoalChange,
+}: DailyStripProps) {
+  const { todayQuestions, streakDays, activeToday } = daily;
   const goalMet = todayQuestions >= goal;
   const pct = Math.min(100, Math.round((todayQuestions / goal) * 100));
   const streakAlive = activeToday || streakDays > 0;
@@ -81,8 +98,55 @@ export function DailyStrip({ daily }: DailyStripProps) {
         {/* today's goal */}
         <div className="min-w-[220px] flex-1">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="flex items-center gap-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               hoy · meta {goal}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="change the daily goal"
+                    title="change the daily goal"
+                    className="inline-flex size-5 items-center justify-center rounded-full text-muted-foreground/70 outline-none transition-colors hover:bg-primary/10 hover:text-primary focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    <PencilLine className="size-3" aria-hidden="true" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto p-3">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                    tu meta diaria
+                  </p>
+                  <div
+                    role="radiogroup"
+                    aria-label="daily goal"
+                    className="mt-2 flex gap-1.5"
+                  >
+                    {DAILY_GOAL_OPTIONS.map((preset) => {
+                      const active =
+                        (userGoal ?? daily.goal) === preset;
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          onClick={() => onGoalChange(preset)}
+                          className={cn(
+                            "inline-flex h-9 items-center rounded-full border px-3.5 font-mono text-xs tabular-nums transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                            active
+                              ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                              : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                          )}
+                        >
+                          {preset}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+                    preguntas por día · se guarda en este navegador
+                  </p>
+                </PopoverContent>
+              </Popover>
             </p>
             <p className="font-mono text-xs tabular-nums">
               {goalMet ? (
