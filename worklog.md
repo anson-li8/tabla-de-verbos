@@ -310,3 +310,38 @@ Task: Continuous improvement round 4 — status assessment, QA, activity heatmap
 - Heatmap day keys use the SERVER's local timezone (dayKey over createdAt) while grid alignment uses the BROWSER's clock — same-machine use is exact; a remote-server TZ mismatch could shift cells by one day near midnight. Acceptable for this self-hosted app (streak logic has the same property).
 - Next-round candidate features (priority order): (1) per-question timing analytics (avgMsPerQuestion exists per session; per-tense timing would reveal slow tenses — add to stats hardestTenses or results); (2) verb-of-the-day archive ("yesterday's verbs" — derive deterministically from date, no schema change needed); (3) practice reminders/pacing hint ("best time to practice" from hour-of-day aggregates); (4) tables mode: per-cell keyboard navigation (arrow keys between inputs) for power users; (5) share card could include the tense-by-tense breakdown bars.
 - QA screenshot artifacts: /home/z/my-project/qa/r4-*.png (16 files) + qa/r4-13-share-card.png (the generated 1080×1350 card itself).
+
+---
+Task ID: 11 (cron review round 5)
+Agent: cron-webDevReview
+Task: Continuous improvement round 5 — status assessment, QA, per-tense timing analytics, chart keyboard navigation, verb-of-the-day archive, polish
+
+## Current project status / assessment
+- App fully stable at round start (rounds 1–10 complete): engine PASS (~13,400 randomized), lint clean, tsc clean (src/), dev server healthy on :3000, DB at 0 sessions.
+- Round-5 QA pass (named session `r5-qa`) found NO app bugs: Tables fill → check feedback, Practice timed session → finish-early → results, no console errors, mobile 390px + desktop 1280px clean.
+- One data-hygiene finding (NOT an app bug): the seed script wrote tally rows with c > t directly to the DB (bypassing API validation), surfacing "126%" in the stats chips. Fixed by (a) clamping in the seed and (b) adding a DEFENSIVE clamp (c ≤ t) in the stats-route tense aggregation so display can never exceed 100% even with malformed rows.
+- Seed-script quirk fixed: daysAgo=0 rows were created 3h IN THE FUTURE (now clamped to a minute ago) — they showed up as "newer than everything" in check-db.
+
+## Goals / completed modifications / verification results
+1. FEATURE — per-tense timing analytics ("how slow is each tense"):
+   - types.ts: TallyEntry + HardestTense gained optional `ms` (backward compatible — pre-timing sessions simply lack it); new `tallyAvgMs()` helper.
+   - quiz-screen: submit/skip now compute `dtMs = Date.now() - questionStartRef.current` once and pass it to `tallyAnswer(correct, dtMs)` which accumulates `ms` per tense alongside c/t.
+   - POST /api/sessions: zod tally entries accept optional `ms` int 0..7,200,000 (2h/tense ceiling); normalizeTally rounds + clamps; curl-verified: negative ms → 400, absurd ms → 400, c>t clamped, t=0 dropped, valid ms persisted verbatim.
+   - GET /api/sessions/stats: parseTally surfaces ms; tense aggregation sums ms (with the new defensive c-clamp); hardestTenses entries carry `ms` when any session tracked it.
+   - results-screen TallyBar: label column became two lines — tense name + `⏱ X.Xs/q` (Clock3 icon, tabular-nums, title "average time per question"), only when ms exists. VLM review: "timing displayed clearly… no layout issues with the two-line labels".
+   - focus-panel "shakiest tenses" chips now show `pct% · ⏱ X.Xs` inline (muted) plus full "avg X.Xs per question" in the tooltip.
+   - VERIFIED end-to-end in-browser: answered 5 real questions (deliberately slow on one) → results showed 1.0s/q, 0.9s/q, 7.3s/q; DB session avg 3.0s; stats chips show "pretérito 66% 5.4s" etc. on desktop AND mobile 390px.
+2. FEATURE — chart keyboard navigation (power users):
+   - conjugation-chart handleInputKeyDown extended: ↑/↓ jump between the same-language column across rows (±2 in DOM order, always captured — vertical arrows do nothing in text inputs); ←/→ navigate ONLY at caret boundaries (position 0 / value.length — mid-text arrows keep moving the caret); Enter unchanged (advance; last cell → check). Footer hint updated to "arrows + enter to fill the chart".
+   - VERIFIED in-browser: inf:es →↓→ ger:es →↑→ inf:es; typed "to give" then → at end → ger:es; caret mid-text (pos 2) + → moved caret 2→3 staying in cell; Enter advanced es→en.
+3. FEATURE — verb-of-the-day archive ("últimos días"):
+   - verb-of-day.tsx: new `recentVerbs(6)` (deterministic, modular-safe for back < catalogue), rendered as a slim second row inside the aside (border-t, mono label + 6 chips with gloss/date tooltips). Chip for the verb currently on the chart is disabled + primary-tinted with a check; others hover → primary border and load the verb on click.
+   - VERIFIED in-browser: 6 chips (dar, caber, reír, conducir, andar, seguir), click "dar" → chart verb switched to dar; mobile 390px fully visible, VLM "clean… no cut-offs".
+4. POLISH: chart section headers now show "N forms" counts (3/5/4/4/7) right-aligned in the sticky group header; footer keyboard hint updated; seed script hardened (clamp + no future timestamps).
+5. QA/verification: lint clean; tsc clean (src/); engine PASS 13399/13399; no console errors; mobile + desktop verified; all test data cleaned (0 sessions); scripts/seed-days.ts updated in place (now emits valid c ≤ t tally with ms + sane timestamps).
+
+## Unresolved issues / risks / next-round priorities
+- Timing data only exists for sessions saved from this round forward (older rows have no ms — the UI hides the timing line gracefully; verified via seeded ms-less rows rendering without the clock line).
+- avgMsPerQuestion on the results hero double-counts nothing but reflects submit+skip time only (time spent reading feedback is excluded by design — questionStartRef resets when the next question renders).
+- Next-round candidate features (priority order): (1) slowest-tense insight line in the focus panel ("you're 2× slower on pretérito — drill it?") derived from the new ms data; (2) share card with tense-by-tense mini bars (canvas already has room between divider and stats row); (3) hour-of-day practice heatmap or "best practice time" hint; (4) tables-mode per-cell streak/attempt counter (needs schema or localStorage); (5) PWA manifest + offline shell (verbs/conjugation are client-computable, only session save needs the network).
+- QA screenshot artifacts: /home/z/my-project/qa/r5-*.png (5 files).

@@ -13,6 +13,7 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
+  Clock3,
   Loader2,
   Sparkles,
   Target,
@@ -337,12 +338,16 @@ export function FocusPanel({
                       const label =
                         ROW_META[t.tense as RowKey]?.labelEs ?? t.tense;
                       const pct = Math.round((t.c / t.t) * 100);
+                      const avgSec =
+                        t.ms && t.t > 0 ? (t.ms / t.t / 1000).toFixed(1) : null;
                       return (
                         <li key={t.tense}>
                           <button
                             type="button"
                             onClick={() => onTenseDrill(t.tense)}
-                            title={`${t.c}/${t.t} correct — tap to drill this tense`}
+                            title={`${t.c}/${t.t} correct${
+                              avgSec ? ` · avg ${avgSec}s per question` : ""
+                            } — tap to drill this tense`}
                             aria-label={`drill ${label} — ${pct}% accuracy over ${t.t} answers`}
                             className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-1 font-mono text-[11px] transition-all outline-none hover:border-primary/50 hover:bg-primary/[0.05] focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-95"
                           >
@@ -350,6 +355,15 @@ export function FocusPanel({
                             <span className="tabular-nums text-muted-foreground">
                               {pct}%
                             </span>
+                            {avgSec && (
+                              <span
+                                className="flex items-center gap-0.5 tabular-nums text-muted-foreground/70"
+                                title="average time per question"
+                              >
+                                <Clock3 className="size-3" aria-hidden="true" />
+                                {avgSec}s
+                              </span>
+                            )}
                           </button>
                         </li>
                       );

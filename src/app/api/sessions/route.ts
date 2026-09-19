@@ -27,13 +27,15 @@ const bodySchema = z.object({
   accentWarnings: z.number().int().min(0).max(1000),
   // loose records — each miss is normalized (trimmed + length-capped) below
   misses: z.array(z.record(z.string(), z.unknown())).max(50).optional(),
-  // per-tense answer counts: tense → { c: correct, t: total }
+  // per-tense answer counts: tense → { c, t, ms? } (ms = time spent,
+  // optional for backward compatibility with pre-timing sessions)
   tally: z
     .record(
       z.string().max(120),
       z.object({
         c: z.number().int().min(0).max(1000),
         t: z.number().int().min(0).max(1000),
+        ms: z.number().int().min(0).max(7_200_000).optional(),
       })
     )
     .optional(),
@@ -69,21 +71,27 @@ function normalizeMiss(raw: Record<string, unknown>): MissRecord {
   };
 }
 
-/** per-tense answer counts — keys capped, c clamped to t, empty t dropped */
+/** per-tense answer counts — keys capped, c clamped to t, empty t
+ *  dropped, ms clamped to a sane ceiling (2h per tense entry) */
 function normalizeTally(
-  raw: Record<string, { c: number; t: number }> | undefined
-): Record<string, { c: number; t: number }> {
+  raw: Record<string, { c: number; t: number; ms?: number }> | undefined
+): Record<string, { c: number; t: number; ms?: number }> {
   if (!raw) return {};
-  const out: Record<string, { c: number; t: number }> = {};
+  const out: Record<string, { c: number; t: number; ms?: number }> = {};
   let keys = 0;
   for (const [tenseRaw, counts] of Object.entries(raw)) {
     if (keys >= 40) break; // defensive cap
     const tense = tenseRaw.trim().slice(0, 120);
     if (!tense || !counts || counts.t <= 0) continue;
-    out[tense] = {
-      t: Math.min(1000, counts.t),
-      c: Math.min(Math.min(1000, counts.t), Math.max(0, counts.c)),
+    const t = Math.min(1000, counts.t);
+    const entry: { c: number; t: number; ms?: number } = {
+      t,
+      c: Math.min(t, Math.max(0, counts.c)),
     };
+    if (typeof counts.ms === "number" && counts.ms > 0) {
+      entry.ms = Math.min(7_200_000, Math.round(counts.ms));
+    }
+    out[tense] = entry;
     keys++;
   }
   return out;

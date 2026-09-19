@@ -63,13 +63,15 @@ function parseMisses(raw: string): MissRow[] {
   }
 }
 
-function parseTally(raw: string): Record<string, { c: number; t: number }> {
+function parseTally(
+  raw: string
+): Record<string, { c: number; t: number; ms?: number }> {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {};
     }
-    const out: Record<string, { c: number; t: number }> = {};
+    const out: Record<string, { c: number; t: number; ms?: number }> = {};
     for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
       if (
         v &&
@@ -77,7 +79,12 @@ function parseTally(raw: string): Record<string, { c: number; t: number }> {
         typeof (v as { c?: unknown }).c === "number" &&
         typeof (v as { t?: unknown }).t === "number"
       ) {
-        out[k] = { c: (v as { c: number }).c, t: (v as { t: number }).t };
+        const ms = (v as { ms?: unknown }).ms;
+        out[k] = {
+          c: (v as { c: number }).c,
+          t: (v as { t: number }).t,
+          ...(typeof ms === "number" && ms > 0 ? { ms } : {}),
+        };
       }
     }
     return out;
@@ -161,20 +168,28 @@ export async function GET() {
       .slice(0, HARDEST_LIMIT);
 
     // ── shakiest tenses (aggregate the per-session tallies) ──
-    const tenseAgg = new Map<string, { c: number; t: number }>();
+    const tenseAgg = new Map<string, { c: number; t: number; ms: number }>();
     for (const s of rows) {
       for (const [tense, v] of Object.entries(parseTally(s.tally))) {
         const key = tense.trim().slice(0, 120);
         if (!key || v.t <= 0) continue;
         const prev = tenseAgg.get(key);
         tenseAgg.set(key, {
-          c: (prev?.c ?? 0) + v.c,
+          // defensive clamp — rows written outside the API (imports,
+          // older builds) may carry c > t
+          c: (prev?.c ?? 0) + Math.min(v.c, v.t),
           t: (prev?.t ?? 0) + v.t,
+          ms: (prev?.ms ?? 0) + (v.ms ?? 0),
         });
       }
     }
     const hardestTenses = [...tenseAgg.entries()]
-      .map(([tense, v]) => ({ tense, c: v.c, t: v.t }))
+      .map(([tense, v]) => ({
+        tense,
+        c: v.c,
+        t: v.t,
+        ...(v.ms > 0 ? { ms: v.ms } : {}),
+      }))
       .filter((v) => v.t >= SHAKIEST_MIN_ANSWERS)
       .sort((a, b) => a.c / a.t - b.c / b.t || b.t - a.t)
       .slice(0, SHAKIEST_LIMIT);

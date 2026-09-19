@@ -102,7 +102,8 @@ export default function Home() {
           </p>
           <p>
             <span className="hidden sm:inline">press 1 / 2 to switch modes · </span>
-            enter to advance · accents count
+            <span className="hidden md:inline">arrows + enter to fill the chart · </span>
+            accents count
           </p>
         </div>
       </footer>

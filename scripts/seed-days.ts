@@ -48,12 +48,21 @@ async function main() {
             userAnswer: "wrong",
           }))
         ),
-        tally: JSON.stringify({
-          pres: { c: Math.floor(score * 0.6), t: Math.floor(total * 0.6) },
-          pret: { c: Math.floor(score * 0.25), t: Math.floor(total * 0.3) },
-          imp: { c: Math.floor(score * 0.15), t: Math.floor(total * 0.1) },
-        }),
-        createdAt: new Date(now - daysAgo * day + 3 * 3600_000),
+        tally: JSON.stringify((() => {
+          const clamp = (c: number, t: number, msPer: number) => {
+            const tt = Math.max(1, t);
+            return { c: Math.min(c, tt), t: tt, ms: tt * msPer };
+          };
+          return {
+            pres: clamp(Math.floor(score * 0.6), Math.floor(total * 0.6), 2600),
+            pret: clamp(Math.floor(score * 0.25), Math.floor(total * 0.3), 5400),
+            imp: clamp(Math.floor(score * 0.15), Math.floor(total * 0.1), 3300),
+          };
+        })()),
+        // daysAgo=0 must not land in the future — clamp to a minute ago
+        createdAt: daysAgo === 0
+          ? new Date(now - 60_000)
+          : new Date(now - daysAgo * day + 3 * 3600_000),
       },
     });
   }

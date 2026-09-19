@@ -21,6 +21,22 @@ function todaysVerb(): string {
   return ALL_VERBS[dayIndex % ALL_VERBS.length];
 }
 
+/** the previous `count` daily picks, newest first (deterministic) */
+function recentVerbs(count: number): { verb: string; date: Date }[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayIndex = Math.floor(today.getTime() / 86_400_000);
+  const out: { verb: string; date: Date }[] = [];
+  for (let back = 1; back <= count; back++) {
+    const idx = ((dayIndex - back) % ALL_VERBS.length + ALL_VERBS.length) % ALL_VERBS.length;
+    out.push({
+      verb: ALL_VERBS[idx],
+      date: new Date(today.getTime() - back * 86_400_000),
+    });
+  }
+  return out;
+}
+
 interface TeaserForm {
   label: string;
   value: string;
@@ -56,6 +72,7 @@ export function VerbOfDay({ current, onPick, onQuiz }: VerbOfDayProps) {
   const gloss = verbGlosses(verb);
   const isCurrent = verb === current;
   const teaser = buildTeaser(verb);
+  const archive = recentVerbs(6);
   const dateLabel = new Date().toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -146,6 +163,43 @@ export function VerbOfDay({ current, onPick, onQuiz }: VerbOfDayProps) {
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* archive — the previous daily picks, one tap to study */}
+      <div className="relative flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-t border-accent-foreground/10 px-4 py-2.5 sm:px-5">
+        <p className="font-mono text-[9px] font-medium uppercase tracking-[0.16em] text-muted-foreground/80">
+          últimos días
+        </p>
+        <ul className="flex flex-wrap items-center gap-1.5">
+          {archive.map(({ verb: pastVerb, date }) => {
+            const onChart = pastVerb === current;
+            return (
+              <li key={pastVerb}>
+                <button
+                  type="button"
+                  onClick={() => onPick(pastVerb)}
+                  disabled={onChart}
+                  aria-label={`study ${pastVerb} — verb of the day ${date.toLocaleDateString(
+                    undefined,
+                    { month: "short", day: "numeric" }
+                  )}`}
+                  title={`${pastVerb} · to ${verbGlosses(pastVerb)} · ${date.toLocaleDateString(
+                    undefined,
+                    { month: "short", day: "numeric" }
+                  )}`}
+                  className={
+                    onChart
+                      ? "inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-mono text-[11px] text-primary"
+                      : "inline-flex items-center gap-1 rounded-full border border-accent-foreground/15 bg-card/70 px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground transition-all outline-none hover:border-primary/40 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-95"
+                  }
+                >
+                  {onChart && <Check className="size-3" aria-hidden="true" />}
+                  {pastVerb}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       </div>
     </motion.aside>
   );

@@ -228,24 +228,58 @@ export function ConjugationChart({
 
   const subjectMeta = SUBJECTS.find((entry) => entry.key === subject);
 
-  // Enter advances: español → english → next row; on the very last
-  // input it triggers Check. Order follows the DOM (TENSE_ROWS order).
+  // Keyboard power tools:
+  //  · Enter advances: español → english → next row; on the very
+  //    last input it triggers Check
+  //  · ↑/↓ jump between the same language column across rows
+  //  · ←/→ move between cells only at caret boundaries (so normal
+  //    text editing still works)
+  // Order follows the DOM (TENSE_ROWS order).
   const handleInputKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key !== "Enter") return;
-      event.preventDefault();
+      const { key } = event;
+      if (key !== "Enter" && key !== "ArrowUp" && key !== "ArrowDown" && key !== "ArrowLeft" && key !== "ArrowRight") {
+        return;
+      }
+      const input = event.currentTarget;
       const sheet = sheetRef.current;
       if (!sheet) return;
+
       const inputs = Array.from(
         sheet.querySelectorAll<HTMLInputElement>("input[data-cell]")
       );
-      const index = inputs.indexOf(event.currentTarget);
-      const next = inputs[index + 1];
+      const index = inputs.indexOf(input);
+      if (index === -1) return;
+
+      let next: HTMLInputElement | undefined;
+      if (key === "Enter") {
+        event.preventDefault();
+        next = inputs[index + 1];
+        if (!next) {
+          onRequestCheck();
+          return;
+        }
+      } else if (key === "ArrowUp" || key === "ArrowDown") {
+        // vertical arrows do nothing inside a text input — safe to own
+        event.preventDefault();
+        next = inputs[index + (key === "ArrowDown" ? 2 : -2)];
+      } else if (key === "ArrowLeft" && (input.selectionStart ?? 0) === 0 && (input.selectionEnd ?? 0) === 0) {
+        event.preventDefault();
+        next = inputs[index - 1];
+      } else if (
+        key === "ArrowRight" &&
+        (input.selectionStart ?? 0) === input.value.length &&
+        (input.selectionEnd ?? 0) === input.value.length
+      ) {
+        event.preventDefault();
+        next = inputs[index + 1];
+      } else {
+        return; // caret movement — let the browser handle it
+      }
+
       if (next) {
         next.focus();
         next.select();
-      } else {
-        onRequestCheck();
       }
     },
     [onRequestCheck]
@@ -325,6 +359,12 @@ export function ConjugationChart({
                   </span>
                   <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                     {GROUP_META[group.group].en}
+                  </span>
+                  <span
+                    className="ml-auto font-mono text-[10px] tabular-nums text-muted-foreground/60"
+                    aria-hidden="true"
+                  >
+                    {group.rows.length} form{group.rows.length === 1 ? "" : "s"}
                   </span>
                 </h3>
               </motion.div>

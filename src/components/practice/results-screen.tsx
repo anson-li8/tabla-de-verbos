@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import { motion } from "framer-motion";
 import {
+  Clock3,
   Flame,
   ImageDown,
   Loader2,
@@ -39,6 +40,7 @@ import {
   formatDuration,
   kindLabel,
   tallyAccuracy,
+  tallyAvgMs,
   tallyTotal,
   type MissRecord,
   type SessionSummary,
@@ -503,14 +505,27 @@ function TallyBar({
         ? "text-primary"
         : "text-destructive";
 
+  const avgMs = tallyAvgMs(entry);
+
   return (
     <div className="flex items-center gap-3 sm:gap-4">
-      <p
-        className="w-32 shrink-0 truncate font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground sm:w-36"
-        title={label}
-      >
-        {label}
-      </p>
+      <div className="w-32 shrink-0 sm:w-36">
+        <p
+          className="truncate font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground"
+          title={label}
+        >
+          {label}
+        </p>
+        {avgMs !== null && (
+          <p
+            className="mt-0.5 flex items-center gap-1 font-mono text-[10px] leading-none tabular-nums text-muted-foreground/80"
+            title="average time per question"
+          >
+            <Clock3 className="size-3 shrink-0" aria-hidden="true" />
+            {(avgMs / 1000).toFixed(1)}s/q
+          </p>
+        )}
+      </div>
       <div
         className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
         role="progressbar"

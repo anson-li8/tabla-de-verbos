@@ -233,8 +233,9 @@ export function QuizScreen({
     ]);
   };
 
-  /** count one answer toward its tense (correct or not) */
-  const tallyAnswer = (correct: boolean) => {
+  /** count one answer toward its tense (correct or not), with
+   *  the time spent on the question (powers per-tense timing) */
+  const tallyAnswer = (correct: boolean, dtMs: number) => {
     if (!question) return;
     const prev = tallyRef.current[question.tense] ?? { c: 0, t: 0 };
     tallyRef.current = {
@@ -242,6 +243,7 @@ export function QuizScreen({
       [question.tense]: {
         c: prev.c + (correct ? 1 : 0),
         t: prev.t + 1,
+        ms: (prev.ms ?? 0) + Math.max(0, Math.round(dtMs)),
       },
     };
   };
@@ -253,7 +255,8 @@ export function QuizScreen({
       shake(); // don't submit empty — shake instead
       return;
     }
-    totalElapsedRef.current += Date.now() - questionStartRef.current;
+    const dtMs = Date.now() - questionStartRef.current;
+    totalElapsedRef.current += dtMs;
     setTotal((t) => t + 1);
 
     const result = checkAnswer(value, question.answers, answerLang(question.kind));
@@ -262,7 +265,7 @@ export function QuizScreen({
       const nextStreak = streak + 1;
       setStreak(nextStreak);
       setBestStreak((b) => Math.max(b, nextStreak));
-      tallyAnswer(true);
+      tallyAnswer(true, dtMs);
       setPhase("right");
       scheduleAdvance(550);
     } else if (result === "accent") {
@@ -272,12 +275,12 @@ export function QuizScreen({
       setStreak(nextStreak);
       setBestStreak((b) => Math.max(b, nextStreak));
       setAccentWarnings((w) => w + 1);
-      tallyAnswer(true);
+      tallyAnswer(true, dtMs);
       setPhase("accent");
       scheduleAdvance(900);
     } else {
       setStreak(0);
-      tallyAnswer(false);
+      tallyAnswer(false, dtMs);
       setPhase("wrong");
       recordMiss(value);
       shake();
@@ -286,10 +289,11 @@ export function QuizScreen({
 
   const skip = () => {
     if (!question || phase !== "asking") return;
-    totalElapsedRef.current += Date.now() - questionStartRef.current;
+    const dtMs = Date.now() - questionStartRef.current;
+    totalElapsedRef.current += dtMs;
     setTotal((t) => t + 1);
     setStreak(0);
-    tallyAnswer(false);
+    tallyAnswer(false, dtMs);
     setPhase("wrong");
     recordMiss("");
   };

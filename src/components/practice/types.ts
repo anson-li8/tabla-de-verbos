@@ -51,10 +51,13 @@ export interface MissRecord {
   userAnswer: string;
 }
 
-/** per-tense answer counts — c = correct, t = total */
+/** per-tense answer counts — c = correct, t = total, ms = time spent */
 export interface TallyEntry {
   c: number;
   t: number;
+  /** total milliseconds spent on this tense's questions (optional —
+   *  older sessions were saved without it) */
+  ms?: number;
 }
 
 /** tense key → { c, t } (sparse — only tenses actually answered) */
@@ -124,6 +127,8 @@ export interface HardestTense {
   tense: string;
   c: number;
   t: number;
+  /** aggregated ms across sessions (absent when no session tracked it) */
+  ms?: number;
 }
 
 /** one practiced day in the activity heatmap (sparse — gaps mean zero) */
@@ -334,6 +339,12 @@ export function answerLang(kind: QuestionKind): "es" | "en" {
 /** accuracy for one tally entry (0 when nothing was answered) */
 export function tallyAccuracy(entry: TallyEntry): number {
   return entry.t > 0 ? entry.c / entry.t : 0;
+}
+
+/** average ms per question for one tally entry (null when untimed) */
+export function tallyAvgMs(entry: TallyEntry): number | null {
+  if (!entry.ms || entry.t <= 0) return null;
+  return entry.ms / entry.t;
 }
 
 /** total questions across a tally (its entries' t summed) */
