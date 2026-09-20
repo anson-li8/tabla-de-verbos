@@ -114,7 +114,7 @@ export default function Home() {
       <footer className="mt-auto border-t">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-1.5 px-4 py-4 sm:flex-row sm:px-6">
           <p className="font-mono text-[11px] font-medium tracking-wide text-muted-foreground">
-            Created by Anson Li using GLM 5.3.
+            Created by Anson Li using GLM 5.3
           </p>
           <p className="font-display text-[12px] italic text-muted-foreground/80">
             <span className="hidden sm:inline">press 1 / 2 / 3 to switch modes · </span>
