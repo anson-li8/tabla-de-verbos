@@ -73,7 +73,7 @@ export default function Home() {
                 Tabla de Verbos
               </h1>
               <p className="mt-1 hidden font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground sm:block">
-                spanish verb mastery
+                For Spanish 5/6
               </p>
             </div>
           </div>
@@ -114,14 +114,13 @@ export default function Home() {
       <footer className="mt-auto border-t">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-1.5 px-4 py-4 sm:flex-row sm:px-6">
           <p className="font-mono text-[11px] font-medium tracking-wide text-muted-foreground">
-            {ALL_VERBS.length} verbs · {TENSE_ROWS.length} forms ·{" "}
-            {SUBJECTS.length} subjects
+            Created by Anson Li using GLM 5.3.
           </p>
           <p className="font-display text-[12px] italic text-muted-foreground/80">
             <span className="hidden sm:inline">press 1 / 2 / 3 to switch modes · </span>
             <span className="hidden md:inline">arrows + enter to fill the chart · </span>
             <span>? for shortcuts · </span>
-            accents count
+            accents matter!
           </p>
         </div>
       </footer>

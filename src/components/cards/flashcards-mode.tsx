@@ -2,7 +2,7 @@
 
 // ─────────────────────────────────────────────────────────────
 // FlashcardsMode — "slow mode" self-paced study. The whole verb
-// catalogue as flippable cards: one verb's 23 forms at a time,
+// catalog as flippable cards: one verb's 23 forms at a time,
 // front shows the prompt (tense + subject + one language), back
 // reveals the answer in both languages with pronunciation.
 // Fully client-side — the conjugation engine runs locally, so
@@ -10,20 +10,21 @@
 // browse-and-absorb complement to Practice mode.
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
+  Check,
   Dices,
   Layers,
   RotateCcw,
   Shuffle,
   Star,
-  Check,
   Volume2,
 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { SubjectPicker } from "@/components/tables/subject-picker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -40,7 +41,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { SubjectPicker } from "@/components/tables/subject-picker";
 import { useSpeech } from "@/hooks/use-speech";
 import { conjugate, type ConjugationRow } from "@/lib/conjugator/engine";
 import {
@@ -767,7 +767,7 @@ export default function FlashcardsMode() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                Jump to a random verb in the catalogue
+                Jump to a random verb in the catalog
               </TooltipContent>
             </Tooltip>
 
@@ -954,7 +954,7 @@ export default function FlashcardsMode() {
 
           {/* keyboard hint */}
           <p className="text-center font-display text-[12px] italic text-muted-foreground/80">
-            ← → walk the deck · space flips
+            ← → traverse the deck · space flips
             {flipped ? " · y / n grades the card" : " the card"}
             {speech.supported ? " · s reads it aloud" : ""}
           </p>
@@ -969,8 +969,8 @@ export default function FlashcardsMode() {
               nada en revisión
             </p>
             <p className="mx-auto mt-1.5 max-w-sm font-mono text-[11px] leading-relaxed text-muted-foreground">
-              flip cards in the full deck and press “no lo sabía” on the ones
-              that trip you up — they land here for a focused second pass.
+              press “no lo sabía” on the cards that trip you up;
+              they end up here for a focused second pass.
             </p>
           </div>
           <Button

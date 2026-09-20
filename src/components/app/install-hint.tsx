@@ -8,9 +8,9 @@
 // browsers that never fire the event (Safari/iOS, Firefox).
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Download, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -30,12 +30,6 @@ export function InstallHint() {
       const candidate = event as InstallPromptEvent;
       if (typeof candidate.prompt !== "function") return;
       event.preventDefault();
-      // respect an earlier dismissal — never nag twice
-      try {
-        if (window.localStorage.getItem(DISMISS_KEY) === "1") return;
-      } catch {
-        // storage unavailable — show it
-      }
       setDeferred(candidate);
     };
     const onInstalled = () => setDeferred(null); // app installed — stop offering
@@ -49,11 +43,6 @@ export function InstallHint() {
 
   const dismiss = () => {
     setDeferred(null);
-    try {
-      window.localStorage.setItem(DISMISS_KEY, "1");
-    } catch {
-      // storage unavailable — just hide for this visit
-    }
   };
 
   const install = async () => {
@@ -87,9 +76,9 @@ export function InstallHint() {
               />
               <span className="min-w-0 truncate text-sm text-muted-foreground">
                 <span className="font-medium text-foreground">
-                  install Tabla de Verbos
+                  Instala Tabla de Verbos!
                 </span>{" "}
-                — practice offline, full-screen, right from your home screen
+                practice offline, full-screen, right from your home screen
               </span>
             </span>
             <span className="flex shrink-0 items-center gap-2">
@@ -99,7 +88,7 @@ export function InstallHint() {
                 className="h-8 gap-1.5 rounded-lg px-3.5 text-xs font-semibold"
               >
                 <Download className="size-3.5" aria-hidden="true" />
-                install
+                Instalar
               </Button>
               <Button
                 size="sm"

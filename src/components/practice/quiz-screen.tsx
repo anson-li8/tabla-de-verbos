@@ -571,7 +571,7 @@ export function QuizScreen({
                   <AlertDialogDescription>
                     {total > 0
                       ? "your session will be saved and your results will appear."
-                      : "no questions answered yet — nothing will be saved."}
+                      : "no questions answered yet! nothing will be saved."}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

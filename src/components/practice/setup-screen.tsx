@@ -381,7 +381,7 @@ export function SetupScreen({
                   </p>
                   <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
                     Spain&apos;s informal &ldquo;you all&rdquo; — habláis, coméis,
-                    vivís. The chart&apos;s 5 classic subjects stay in the mix.
+                    vivís.
                   </p>
                 </div>
                 <button
@@ -443,7 +443,7 @@ export function SetupScreen({
                   onClick={() => onChange({ ...settings, mode: "infinite" })}
                   Icon={InfinityIcon}
                   label="Infinite"
-                  description="no clock — practice until you stop"
+                  description="unlimited practice until you stop"
                 />
               </div>
               <AnimatePresence initial={false}>

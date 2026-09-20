@@ -8,7 +8,6 @@
 // so this is where learners control their own history.
 // ─────────────────────────────────────────────────────────────
 
-import { useRef } from "react";
 import {
   CornerDownLeft,
   Download,
@@ -18,6 +17,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+import { useRef } from "react";
 
 import {
   AlertDialog,
@@ -141,7 +141,7 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
       toast({
         variant: "destructive",
         title: "Import failed",
-        description: "Couldn't read that file — try again.",
+        description: "Couldn't read that file! try again.",
       });
     };
     reader.readAsText(file);
@@ -176,7 +176,7 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
             atajos de teclado
           </DialogTitle>
           <DialogDescription>
-            power tools for fast practice — works everywhere in the app
+            keyboard shortcuts to improve your experience; works everywhere in the app
           </DialogDescription>
         </DialogHeader>
 
@@ -184,7 +184,7 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
           <ShortcutRow
             keys={["1", "2", "3"]}
             label="switch modes"
-            note="1 · tables — 2 · practice — 3 · cards (T / P / C also work)"
+            note="1 -> tables | 2 -> practice | 3 -> cards (T/P/C also work)"
           />
           <ShortcutRow
             keys={["?"]}
@@ -193,37 +193,37 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
           <ShortcutRow
             keys={["Space"]}
             label="flip the flashcard"
-            note="cards mode — also Enter, or just click the card"
+            note="cards mode - also Enter, or just click the card"
           />
           <ShortcutRow
             keys={["←", "→"]}
-            label="walk the flashcard deck"
-            note="cards mode — wraps around at both ends"
+            label="advance/go back the flashcard deck"
+            note="cards mode"
           />
           <ShortcutRow
             keys={["S"]}
             label="hear the card in Spanish"
-            note="cards mode — browser speech, works offline"
+            note="cards mode - browser speech, works offline"
           />
           <ShortcutRow
             keys={["Enter"]}
             label="submit your answer"
-            note="practice mode — then press it again to continue"
+            note="practice mode - then press it again to continue"
           />
           <ShortcutRow
             keys={["Enter"]}
             label="walk the chart, then check it"
-            note="tables mode — español → english → next row, check at the end"
+            note="tables mode - español -> english -> next row, check at the end"
           />
           <ShortcutRow
             keys={["↑", "↓"]}
             label="jump between rows"
-            note="tables mode — same language, previous / next row"
+            note="tables mode - same language, previous / next row"
           />
           <ShortcutRow
             keys={["←", "→"]}
             label="move between cells"
-            note="tables mode — only at caret boundaries, so typing is untouched"
+            note="also in tables modes"
           />
         </div>
 
@@ -233,7 +233,7 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
             aria-hidden="true"
           />
           accents count — tap the á é í ó ú keys under the answer box, or
-          keep typing with your own keyboard layout
+          type with your own keyboard layout
         </p>
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <MoveVertical className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
@@ -251,7 +251,7 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
             tus datos · 100% local
           </p>
           <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-            sessions, streaks &amp; mastery live in this browser — no account,
+            sessions, streaks &amp; mastery stay in this browser — no account,
             no server, nothing ever leaves your device. move your history
             wherever you like:
           </p>

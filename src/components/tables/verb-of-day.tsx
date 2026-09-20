@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 // VerbOfDay — a slim editorial spotlight strip for the Tables
 // landing: one deterministic verb per day (cycles through the
-// whole catalogue), with a live conjugation teaser computed by
+// whole catalog), with a live conjugation teaser computed by
 // the shared engine and a one-tap "study this verb" action.
 // ─────────────────────────────────────────────────────────────
 
@@ -17,7 +17,7 @@ import { conjugateOne } from "@/lib/conjugator/engine";
 import { ALL_VERBS, verbGlosses } from "@/lib/conjugator/types";
 import { cn } from "@/lib/utils";
 
-/** deterministic daily pick — local midnight, full catalogue cycle */
+/** deterministic daily pick — local midnight, full catalog cycle */
 function todaysVerb(): string {
   const dayIndex = Math.floor(new Date().setHours(0, 0, 0, 0) / 86_400_000);
   return ALL_VERBS[dayIndex % ALL_VERBS.length];
