@@ -24,7 +24,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Tabla de Verbos — Spanish Verb Mastery",
+  title: "El Conjugador — Spanish Verb Mastery",
   description:
     "Master Spanish conjugation with classical verb tables and adaptive practice drills: conjugation, translation, timed challenges and infinite mode.",
   keywords: [
@@ -40,16 +40,16 @@ export const metadata: Metadata = {
     apple: "/icons/icon-192.png",
   },
   manifest: "/manifest.webmanifest",
-  applicationName: "Tabla de Verbos",
+  applicationName: "El Conjugador",
   appleWebApp: {
     capable: true,
-    title: "Tabla de Verbos",
+    title: "El Conjugador",
     statusBarStyle: "default",
   },
   openGraph: {
-    title: "Tabla de Verbos",
+    title: "El Conjugador",
     description: "Classical verb tables + modern practice drills for Spanish conjugation mastery.",
-    siteName: "Tabla de Verbos",
+    siteName: "El Conjugador",
     type: "website",
   },
 };

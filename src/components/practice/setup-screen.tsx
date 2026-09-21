@@ -508,7 +508,7 @@ export function SetupScreen({
               {startError && (
                 <div className="flex flex-wrap items-center justify-center gap-3">
                   <p className="text-sm text-destructive">
-                    connection hiccup — couldn&apos;t load the first question
+                    connection issue — couldn&apos;t load the first question
                   </p>
                   <Button
                     variant="outline"

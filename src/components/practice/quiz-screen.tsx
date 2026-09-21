@@ -822,7 +822,7 @@ export function QuizScreen({
               exit={{ opacity: 0 }}
             >
               <Card className="items-center gap-4 rounded-2xl px-6 py-16 text-center shadow-sm">
-                <p className="font-display text-2xl">connection hiccup</p>
+                <p className="font-display text-2xl">connection issue</p>
                 <p className="text-sm text-muted-foreground">
                   couldn&apos;t load the next question
                 </p>

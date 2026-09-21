@@ -237,7 +237,7 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
         </p>
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <MoveVertical className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          installed as an app, Tabla de Verbos works fully offline — questions
+          installed as an app, El Conjugador works fully offline — questions
           are generated right on your device
         </p>
 

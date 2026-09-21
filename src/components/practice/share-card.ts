@@ -147,7 +147,7 @@ function drawCard(
   ctx.textAlign = "center";
 
   // ── masthead ────────────────────────────────────────────
-  monoSpaced(ctx, "TABLA DE VERBOS", W / 2, 132, 10, INK, 28);
+  monoSpaced(ctx, "EL CONJUGADOR", W / 2, 132, 10, INK, 28);
   monoSpaced(ctx, "SPANISH VERB MASTERY", W / 2, 172, 6, INK_MUTED, 18);
 
   // ── headline ────────────────────────────────────────────
@@ -241,7 +241,7 @@ function drawCard(
   // ── footer ──────────────────────────────────────────────
   const footerY = tenses.length > 0 ? { date: 1442, mark: 1476 } : { date: 1240, mark: 1276 };
   monoSpaced(ctx, dateLabel.toUpperCase(), W / 2, footerY.date, 5, INK_MUTED, 20);
-  monoSpaced(ctx, "— TABLADEVERBOS —", W / 2, footerY.mark, 5, INK_FAINT, 16);
+  monoSpaced(ctx, "— ELCONJUGADOR —", W / 2, footerY.mark, 5, INK_FAINT, 16);
 }
 
 /** render the card and trigger a PNG download; resolves false on failure */
@@ -274,7 +274,7 @@ export async function downloadShareCard(d: ShareCardData): Promise<boolean> {
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `tabla-de-verbos-${d.score}de${d.total}.png`;
+          a.download = `el-conjugador-${d.score}de${d.total}.png`;
           document.body.appendChild(a);
           a.click();
           a.remove();

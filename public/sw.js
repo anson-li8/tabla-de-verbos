@@ -73,7 +73,7 @@ self.addEventListener("fetch", (event) => {
           const cached = await caches.match("/");
           if (cached) return cached;
           return new Response(
-            "<!doctype html><title>Tabla de Verbos</title><p style=\"font-family:serif;padding:2rem\">Offline — reload once connected.</p>",
+            "<!doctype html><title>El Conjugador</title><p style=\"font-family:serif;padding:2rem\">Offline — reload once connected.</p>",
             { headers: { "Content-Type": "text/html; charset=utf-8" } }
           );
         }

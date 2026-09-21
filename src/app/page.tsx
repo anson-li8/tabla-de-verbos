@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState } from "react";
 
 import { HelpDialog } from "@/components/app/help-dialog";
 import { InstallHint } from "@/components/app/install-hint";
@@ -11,11 +11,6 @@ import { ThemeToggle } from "@/components/app/theme-toggle";
 import FlashcardsMode from "@/components/cards/flashcards-mode";
 import PracticeMode from "@/components/practice/practice-mode";
 import TablesMode from "@/components/tables/tables-mode";
-import {
-  ALL_VERBS,
-  SUBJECTS,
-  TENSE_ROWS,
-} from "@/lib/conjugator/types";
 
 export default function Home() {
   const [mode, setMode] = useState<AppMode>("tables");
@@ -70,7 +65,7 @@ export default function Home() {
             <LogoMark className="size-9 shrink-0" />
             <div className="min-w-0">
               <h1 className="font-display text-lg font-semibold italic leading-none tracking-tight">
-                Tabla de Verbos
+                El Conjugador
               </h1>
               <p className="mt-1 hidden font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground sm:block">
                 For Spanish 5/6
@@ -114,7 +109,7 @@ export default function Home() {
       <footer className="mt-auto border-t">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-1.5 px-4 py-4 sm:flex-row sm:px-6">
           <p className="font-mono text-[11px] font-medium tracking-wide text-muted-foreground">
-            Created by Anson Li using GLM 5.3
+            Any issues/suggestions? Email Anson at <a href="mailto:28lian@elmbrookstudents.org?subject=El%20Conjugador%20-%20Issue%2FSuggestion%20Report&body=Hi%20Anson%2C%0A%0A%5BIssue%2Fsuggestion%20here%5D">28lian@elmbrookstudents.org</a>
           </p>
           <p className="font-display text-[12px] italic text-muted-foreground/80">
             <span className="hidden sm:inline">press 1 / 2 / 3 to switch modes · </span>

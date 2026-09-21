@@ -175,13 +175,13 @@ export function ResultsScreen({
   const handleShare = async () => {
     const pct = Math.round(summary.accuracy * 100);
     const text = [
-      "Tabla de Verbos — sesión de práctica",
+      "El Conjugador — sesión de práctica",
       `${summary.score}/${summary.total} correct · ${pct}% accuracy`,
       `racha máxima ${summary.bestStreak} · ${modeLine}`,
     ].join("\n");
     try {
       if (navigator.share) {
-        await navigator.share({ title: "Tabla de Verbos", text });
+        await navigator.share({ title: "El Conjugador", text });
         return;
       }
       await navigator.clipboard.writeText(text);

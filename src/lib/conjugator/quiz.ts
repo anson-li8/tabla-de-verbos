@@ -2,8 +2,9 @@
 // Tabla de Verbos — practice quiz generator
 // ─────────────────────────────────────────────────────────────
 
-import { conjugate } from "./engine";
 import type { ConjugationRow } from "./engine";
+import { conjugate } from "./engine";
+import type { RowKey, SubjectKey } from "./types";
 import {
   ALL_VERBS,
   ROW_META,
@@ -13,7 +14,6 @@ import {
   SUBJECT_KEYS,
   TENSE_ROWS,
 } from "./types";
-import type { RowKey, SubjectKey } from "./types";
 
 export type QuestionKind = "conjugation" | "translate-es-en" | "translate-en-es";
 
@@ -162,6 +162,10 @@ function conjugationQuestion(
   const subject = pickSubject(tense, subjectPool);
   const rows = rowsByTense(verb, subject ?? DEFAULT_ROW_SUBJECT);
   const row = rowFor(rows, tense);
+
+  const isCommand = COMMAND_TENSES.has(tense);
+  const person = COMMAND_PERSON[tense];
+
   return {
     id: crypto.randomUUID(),
     kind: "conjugation",
@@ -170,8 +174,12 @@ function conjugationQuestion(
     tense,
     tenseLabelEs: meta.labelEs,
     tenseLabelEn: meta.labelEn,
-    promptMain: verb,
-    chips: subject ? [PRONOUN[subject], meta.labelEs] : [meta.labelEs],
+    promptMain: isCommand ? `${verb} → ¡___! (${person})` : verb,
+    chips: isCommand
+      ? ["Conjugate as a command", meta.labelEs]
+      : subject
+        ? [PRONOUN[subject], meta.labelEs]
+        : [meta.labelEs],
     answers: row.spanish,
     displayAnswer: row.spanish[0],
   };
@@ -241,6 +249,7 @@ function translateEnEsQuestion(
   const chosen = rowFor(rows, tense);
 
   const phrase = chosen.english[0];
+  const isCommand = COMMAND_TENSES.has(tense);
   const answers: string[] = [];
   for (const row of rows.values()) {
     if (row.english.includes(phrase)) {
@@ -257,7 +266,10 @@ function translateEnEsQuestion(
     tense,
     tenseLabelEs: meta.labelEs,
     tenseLabelEn: meta.labelEn,
-    promptMain: phrase,
+    promptMain: isCommand ? tense === "nos"
+    ? `${phrase}!`
+    : `${phrase}! (${COMMAND_PERSON[tense]})`
+    : phrase,
     chips: ["EN → ES", meta.labelEs],
     answers: dedup(answers),
     displayAnswer: chosen.spanish[0],

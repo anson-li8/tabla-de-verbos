@@ -720,7 +720,7 @@ export function importPracticeData(
       typeof parsed !== "object" ||
       (parsed as { app?: unknown }).app !== "tabla-de-verbos"
     ) {
-      return { ok: false, error: "Not a Tabla de Verbos backup file." };
+      return { ok: false, error: "Not an El Conjugador backup file." };
     }
     const blob = parsed as Partial<ExportBlob>;
     const incomingSessions = Array.isArray(blob.sessions)

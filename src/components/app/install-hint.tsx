@@ -76,7 +76,7 @@ export function InstallHint() {
               />
               <span className="min-w-0 truncate text-sm text-muted-foreground">
                 <span className="font-medium text-foreground">
-                  Instala Tabla de Verbos!
+                  Instala El Conjugador!
                 </span>{" "}
                 practice offline, full-screen, right from your home screen
               </span>
